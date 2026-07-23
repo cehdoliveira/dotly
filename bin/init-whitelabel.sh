@@ -14,6 +14,10 @@
 #
 # Idempotente: rodar 2x NAO double-substitui (sed casa o placeholder literal,
 # que some apos primeiro run). Atalho: --force sobrescreve kernel.php existente.
+#.limitacao: re-run com --admin-email/--admin-name DIFERENTES nao atualiza a
+# migration 002 (o sed anchored casa o placeholder original 'admin@example.com'
+# /'Admin', que foi substituido no primeiro run). Para trocar o seed, faca
+# `git checkout -- migrations/002_create_table_users.sql` e rode de novo.
 #
 # Validador integrado: aborta exit 2 se encontrar "dotly"/"_HOSTS__"/"#2e2b6e"
 # residual em qualquer target apos as substituicoes.
@@ -134,6 +138,27 @@ if [ -z "$PRIMARY_COLOR" ]; then PRIMARY_COLOR="#2e2b6e"; fi   # brand color ori
 if [ -z "$ADMIN_EMAIL" ]; then ADMIN_EMAIL="admin@example.com"; fi   # generico; operador customiza
 if [ -z "$ADMIN_NAME" ]; then ADMIN_NAME="Admin"; fi             # generico brand-neutral
 
+# ===== Validação de input: admin-email (SQL-injection guard) =====
+# Rejeitar email mal-formado protege o seed SQL da migration 002 (o sed injeta
+# o valor dentro de string SQL delimitada por '). MEDIUM auditado no /ship-php.
+if [ -n "$ADMIN_EMAIL" ] && ! printf '%s' "$ADMIN_EMAIL" | grep -qE '^[^@"'"'"'\(\);[:space:]]+@[^@"'"'"'\(\);[:space:]]+\.[^@"'"'"'\(\);[:space:]]+$'; then
+    echo "ERRO: --admin-email formato invalido ou contem caracteres perigosos (', \", ;, (, )). Aborta." >&2
+    echo "  Recebido: '$ADMIN_EMAIL'" >&2
+    exit 1
+fi
+
+# ===== Rejeita — aspa simples em --admin-name (SQL-injection guard) =====
+# O sed injeta ${E_ADMIN_NAME} dentro de string SQL 'Admin' -> 'X'. Um input
+# com ' quebra SQL. Não compensa escapar (escape SQL é MySQL-mode-specific);
+# rejeitar é simplicidade defensiva.
+case "$ADMIN_NAME" in
+    *\'*)
+        echo "ERRO: --admin-name nao pode conter aspas simples (risco de SQL injection no seed da migration). Use nome sem apostrofos." >&2
+        echo "  Recebido: '$ADMIN_NAME'" >&2
+        exit 1
+        ;;
+esac
+
 SITE_HOST="$(host_of "$SITE_URL")"
 MANAGER_HOST="$(host_of "$MANAGER_URL")"
 
@@ -183,8 +208,8 @@ for css in \
 do
     [ -f "$css" ] || continue
     sed -i \
-        -e "s/#2e2b6e/${E_PRIMARY}/gI" \
-        -e "s/#5855b0/${E_PRIMARY}/gI" \
+        -e "s|#2e2b6e|${E_PRIMARY}|gI" \
+        -e "s|#5855b0|${E_PRIMARY}|gI" \
         "$css"
     echo "Substituido: $css"
 done
@@ -195,8 +220,8 @@ for tpl in \
 do
     [ -f "$tpl" ] || continue
     sed -i \
-        -e "s/#2e2b6e/${E_PRIMARY}/gI" \
-        -e "s/#5855b0/${E_PRIMARY}/gI" \
+        -e "s|#2e2b6e|${E_PRIMARY}|gI" \
+        -e "s|#5855b0|${E_PRIMARY}|gI" \
         "$tpl"
     echo "Substituido: $tpl"
 done
@@ -205,8 +230,8 @@ done
 NGINX_CONF="$ROOT/docker/interface/default.conf"
 if [ -f "$NGINX_CONF" ]; then
     sed -i \
-        -e "s/__SITE_HOSTS__/${E_SITE_HOSTS}/g" \
-        -e "s/__MANAGER_HOSTS__/${E_MANAGER_HOSTS}/g" \
+        -e "s|__SITE_HOSTS__|${E_SITE_HOSTS}|g" \
+        -e "s|__MANAGER_HOSTS__|${E_MANAGER_HOSTS}|g" \
         "$NGINX_CONF"
     echo "Substituido: $NGINX_CONF"
 fi
@@ -225,8 +250,8 @@ if [ -f "$MIGRATION_USERS" ] && { [ -n "$ADMIN_EMAIL" ] || [ -n "$ADMIN_NAME" ];
     # (adicionado pelo squash do Plan 001) NAO casa esse padrao e fica intacto,
     # preservando a doc de defaults para futuros operadores.
     sed -E -i \
-        -e "s/^([[:space:]]+)'admin@example\.com',$/\\1'${E_ADMIN_EMAIL}',/" \
-        -e "s/^([[:space:]]+)'Admin',$/\\1'${E_ADMIN_NAME}',/" \
+        -e "s|^([[:space:]]+)'admin@example\.com',$|\\1'${E_ADMIN_EMAIL}',|" \
+        -e "s|^([[:space:]]+)'Admin',$|\\1'${E_ADMIN_NAME}',|" \
         "$MIGRATION_USERS"
     echo "Substituido: $MIGRATION_USERS"
 fi
@@ -241,27 +266,37 @@ fi
 if [ "${NO_VALIDATE:-0}" -ne 1 ]; then
     RESIDUAL=0
     residual_check() {
-        local pattern="$1" files="$2" label="$3"
+        local pattern="$1" label="$2"
+        shift 2
         local hits
-        hits=$(rg -c "$pattern" $files 2>/dev/null | wc -l)
+        hits=$(rg -c "$pattern" "$@" 2>/dev/null | wc -l)
         if [ "$hits" -gt 0 ]; then
             echo "ALERTA — residual de '$label' em $hits arquivo(s):" >&2
-            rg -n "$pattern" $files 2>/dev/null | head -10 >&2
+            rg -n "$pattern" "$@" 2>/dev/null | head -10 >&2
             RESIDUAL=1
         fi
     }
 
     residual_check "dotly" \
-        "$SITE_KERNEL $MANAGER_KERNEL $ROOT/site/public_html/assets/css/main.css $ROOT/manager/public_html/assets/css/main.css $ROOT/site/public_html/ui/mail/order_paid.php $ROOT/manager/public_html/ui/mail/order_shipped.php $ROOT/docker/interface/default.conf $ROOT/migrations/002_create_table_users.sql" \
-        "brand do vendor (dotly/Dotly)"
+        "brand do vendor (dotly/Dotly)" \
+        "$SITE_KERNEL" "$MANAGER_KERNEL" \
+        "$ROOT/site/public_html/assets/css/main.css" \
+        "$ROOT/manager/public_html/assets/css/main.css" \
+        "$ROOT/site/public_html/ui/mail/order_paid.php" \
+        "$ROOT/manager/public_html/ui/mail/order_shipped.php" \
+        "$ROOT/docker/interface/default.conf" \
+        "$ROOT/migrations/002_create_table_users.sql"
 
     residual_check "__SITE_HOSTS__|__MANAGER_HOSTS__" \
-        "$ROOT/docker/interface/default.conf" \
-        "placeholder de nginx hosts (script deveria ter substituido)"
+        "placeholder de nginx hosts (script deveria ter substituido)" \
+        "$ROOT/docker/interface/default.conf"
 
     residual_check "#2e2b6e|#5855b0|#2E2B6E|#5855B0" \
-        "$ROOT/site/public_html/assets/css/main.css $ROOT/manager/public_html/assets/css/main.css $ROOT/site/public_html/ui/mail/order_paid.php $ROOT/manager/public_html/ui/mail/order_shipped.php" \
-        "cores de marca do vendor (#2e2b6e/#5855b0)"
+        "cores de marca do vendor (#2e2b6e/#5855b0)" \
+        "$ROOT/site/public_html/assets/css/main.css" \
+        "$ROOT/manager/public_html/assets/css/main.css" \
+        "$ROOT/site/public_html/ui/mail/order_paid.php" \
+        "$ROOT/manager/public_html/ui/mail/order_shipped.php"
 
     if [ "$RESIDUAL" -ne 0 ]; then
         echo
