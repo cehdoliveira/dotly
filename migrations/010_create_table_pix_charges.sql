@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `pix_charges` (
     `orders_id` INT NOT NULL,
     `payment_gateways_id` INT NOT NULL,
     `gateway_charge_id` VARCHAR(120) DEFAULT NULL,
+    `transaction_nsu` VARCHAR(64) DEFAULT NULL,
     `status` ENUM('pendente', 'pago', 'expirado', 'erro') NOT NULL DEFAULT 'pendente',
     `qr_payload` TEXT DEFAULT NULL,
     `qr_image_base64` LONGTEXT DEFAULT NULL,
@@ -19,5 +20,7 @@ CREATE TABLE IF NOT EXISTS `pix_charges` (
     `paid_at` DATETIME DEFAULT NULL,
     PRIMARY KEY (`idx`),
     UNIQUE KEY `uq_pix_charge_gateway` (`payment_gateways_id`, `gateway_charge_id`),
-    KEY `idx_pix_charges_order` (`orders_id`, `active`)
+    UNIQUE KEY `uq_pix_charge_transaction_nsu` (`transaction_nsu`),
+    KEY `idx_pix_charges_order` (`orders_id`, `active`),
+    KEY `idx_pix_charges_active_status` (`active`, `status`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
     `customer_name` VARCHAR(255) NOT NULL,
     `customer_mail` VARCHAR(255) NOT NULL,
     `customer_phone` VARCHAR(20) NOT NULL,
+    `customer_cpf` CHAR(11) NOT NULL,
     `ship_zip` VARCHAR(9) NOT NULL,
     `ship_street` VARCHAR(255) NOT NULL,
     `ship_number` VARCHAR(20) NOT NULL,
@@ -19,10 +20,19 @@ CREATE TABLE IF NOT EXISTS `orders` (
     `ship_district` VARCHAR(120) NOT NULL,
     `ship_city` VARCHAR(120) NOT NULL,
     `ship_uf` CHAR(2) NOT NULL,
+    `subtotal_cents` INT UNSIGNED NOT NULL DEFAULT 0,
+    `fee_percent_cents` INT UNSIGNED NOT NULL DEFAULT 0,
+    `fee_fixed_cents` INT UNSIGNED NOT NULL DEFAULT 0,
+    `fee_infinity_cents` INT UNSIGNED NOT NULL DEFAULT 0,
     `total_cents` INT UNSIGNED NOT NULL DEFAULT 0,
     `paid_at` DATETIME DEFAULT NULL,
+    `tracking_code` VARCHAR(64) DEFAULT NULL,
+    `shipped_at` DATETIME DEFAULT NULL,
     `expires_at` DATETIME NOT NULL,
     PRIMARY KEY (`idx`),
     KEY `idx_orders_status_expires` (`status`, `expires_at`),
-    KEY `idx_orders_created` (`created_at`)
+    KEY `idx_orders_created` (`created_at`),
+    KEY `idx_orders_customer_mail` (`customer_mail`),
+    KEY `idx_orders_active_mail_idx` (`active`, `customer_mail`, `idx`),
+    KEY `idx_orders_status_paid` (`status`, `paid_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

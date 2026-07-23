@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS `profiles` (
 -- Perfis de sistema
 -- INSERT IGNORE: com `slug` UNIQUE, re-execuções viram no-op em vez de
 -- acumular perfis duplicados (admin/user).
+-- editabled='no' para admin e user: perfis de sistema não são editáveis
+-- pelo painel manager (fold da migration 008_lock_seed_profiles).
 INSERT IGNORE INTO
     `profiles` (
         `created_at`,
@@ -36,7 +38,7 @@ VALUES (
         0,
         'yes',
         'Administrador',
-        'yes',
+        'no',
         'admin',
         'yes',
         0
@@ -46,7 +48,7 @@ VALUES (
         0,
         'yes',
         'Usuário',
-        'yes',
+        'no',
         'user',
         'no',
         0

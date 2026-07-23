@@ -1,11 +1,14 @@
--- Plano 016: fila de e-mails transacionais. Ledger persistente — cada evento do
--- ciclo do pedido (pagamento confirmado, pedido enviado) vira 1 linha aqui. Um
--- cron dispatcher (site/cgi-bin/dispatch_emails.php) le as linhas 'pending' e
--- chama EmailProducer::send() (Kafka -> worker SMTP existente), marcando
--- sent/failed. Retry fica na propria tabela (attempts/max_attempts).
+-- Fila de e-mails transacionais. Ledger persistente — cada evento do ciclo do
+-- pedido (pagamento confirmado, pedido enviado) vira 1 linha aqui. Um cron
+-- dispatcher (site/cgi-bin/dispatch_emails.php) lê as linhas 'pending' e chama
+-- EmailProducer::send() (Kafka -> worker SMTP existente), marcando sent/failed.
+-- Retry fica na própria tabela (attempts/max_attempts).
 --
--- UNIQUE(orders_id, event_type): no maximo 1 e-mail por evento por pedido —
--- dedupe caso o webhook (ou a acao de "marcar como enviado") dispare 2x.
+-- status ENUM inclui 'queued' (fold da migration 041): pending -> queued (produzido
+-- no Kafka) -> sent (entregue pelo worker) -> failed (terminal).
+--
+-- UNIQUE(orders_id, event_type): no máximo 1 e-mail por evento por pedido —
+-- dedupe caso o webhook (ou a ação de "marcar como enviado") dispare 2x.
 CREATE TABLE IF NOT EXISTS `email_queue` (
     `idx` INT NOT NULL AUTO_INCREMENT,
     `created_at` DATETIME DEFAULT NULL,
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `email_queue` (
     `to_mail` VARCHAR(255) NOT NULL,
     `subject` VARCHAR(500) NOT NULL,
     `body` LONGTEXT NOT NULL,
-    `status` ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+    `status` ENUM('pending','queued','sent','failed') NOT NULL DEFAULT 'pending',
     `attempts` INT UNSIGNED NOT NULL DEFAULT 0,
     `max_attempts` INT UNSIGNED NOT NULL DEFAULT 5,
     `last_error` TEXT DEFAULT NULL,
