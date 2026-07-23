@@ -34,7 +34,9 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_DATABASE: db_dotly
+          # Default alinhado com site/app/inc/kernel.php.example (DB_NAME="db_app").
+          # Em forks whitelabel com DB_NAME diferente, ajuste aqui ou injete via secret.
+          MYSQL_DATABASE: db_app
           MYSQL_ROOT_PASSWORD: ci_root
         ports: ["3306:3306"]
         options: >-
@@ -54,12 +56,12 @@ jobs:
         run: |
           for env in site manager; do
             cp $env/app/inc/kernel.php.example $env/app/inc/kernel.php
-            sed -i 's/define("DB_HOST", "mysql")/define("DB_HOST", "127.0.0.1")/' $env/app/inc/kernel.php
-            sed -i 's/define("DB_USER", "user_dotly")/define("DB_USER", "root")/' $env/app/inc/kernel.php
-            sed -i 's/define("DB_PASS", "SUA_SENHA_AQUI")/define("DB_PASS", "ci_root")/' $env/app/inc/kernel.php
+            sed -i 's/define("DB_HOST", "[^"]*")/define("DB_HOST", "127.0.0.1")/' $env/app/inc/kernel.php
+            sed -i 's/define("DB_USER", "[^"]*")/define("DB_USER", "root")/' $env/app/inc/kernel.php
+            sed -i 's/define("DB_PASS", "[^"]*")/define("DB_PASS", "ci_root")/' $env/app/inc/kernel.php
           done
       - name: Rodar migrations (runner real)
-        run: HTTP_HOST=dotly.local php site/cgi-bin/run_migrations.php
+        run: HTTP_HOST=$(grep -oP 'define\("ALLOWED_HOSTS",\s*"\K[^"]+' site/app/inc/kernel.php.example | head -1 | cut -d, -f1) php site/cgi-bin/run_migrations.php
       - name: PHPUnit site
         run: HTTP_HOST=localhost php site/app/inc/lib/vendor/bin/phpunit -c site/phpunit.xml
       - name: PHPUnit manager

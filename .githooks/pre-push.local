@@ -13,13 +13,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-CONTAINER=dotly
+CONTAINER=app
 
 if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER"; then
     echo -e "${YELLOW}Container '$CONTAINER' não está rodando — PHPUnit pulado no pre-push.${NC}"
     echo -e "${YELLOW}Suba o ambiente e rode a suíte antes de subir mudanças:${NC}"
     echo -e "${YELLOW}  docker compose -f docker/docker-compose.yml up -d${NC}"
-    echo -e "${YELLOW}  docker exec $CONTAINER php /var/www/dotly/site/app/inc/lib/vendor/bin/phpunit -c /var/www/dotly/site/phpunit.xml${NC}"
+    echo -e "${YELLOW}  docker exec $CONTAINER php /var/www/app/site/app/inc/lib/vendor/bin/phpunit -c /var/www/app/site/phpunit.xml${NC}"
     exit 0
 fi
 
@@ -29,8 +29,8 @@ for DIR in manager site; do
     if [ -f "$DIR/phpunit.xml" ]; then
         echo "→ PHPUnit ($DIR)..."
         if docker exec "$CONTAINER" php -d memory_limit=512M \
-            "/var/www/dotly/$DIR/app/inc/lib/vendor/bin/phpunit" \
-            -c "/var/www/dotly/$DIR/phpunit.xml"; then
+            "/var/www/app/$DIR/app/inc/lib/vendor/bin/phpunit" \
+            -c "/var/www/app/$DIR/phpunit.xml"; then
             echo -e "${GREEN}  PHPUnit OK${NC}"
         else
             echo -e "${RED}  PHPUnit FAILED — push blocked${NC}"
@@ -41,7 +41,7 @@ done
 
 if [ "$PHPUNIT_FAILED" = true ]; then
     echo -e "\n${YELLOW}Corrija os testes antes de subir. Para investigar:${NC}"
-    echo -e "${YELLOW}  docker exec $CONTAINER php /var/www/dotly/site/app/inc/lib/vendor/bin/phpunit -c /var/www/dotly/site/phpunit.xml${NC}"
+    echo -e "${YELLOW}  docker exec $CONTAINER php /var/www/app/site/app/inc/lib/vendor/bin/phpunit -c /var/www/app/site/phpunit.xml${NC}"
     exit 1
 fi
 

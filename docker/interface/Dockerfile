@@ -33,21 +33,21 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 # Nginx config — remove default, add ours
 RUN rm /etc/nginx/sites-enabled/default
-COPY default.conf /etc/nginx/sites-available/dotly.conf
-RUN ln -s /etc/nginx/sites-available/dotly.conf /etc/nginx/sites-enabled/dotly.conf
+COPY default.conf /etc/nginx/sites-available/app.conf
+RUN ln -s /etc/nginx/sites-available/app.conf /etc/nginx/sites-enabled/app.conf
 
 # PHP config
 COPY php.ini /usr/local/etc/php/php.ini
 
 # PHP-FPM pool override — permite getenv() acessar vars do Nginx
-COPY zz-dotly.conf /usr/local/etc/php-fpm.d/zz-dotly.conf
+COPY zz-app.conf /usr/local/etc/php-fpm.d/zz-app.conf
 
 # Diretórios lib
-RUN mkdir -p /var/www/dotly/site/app/inc/lib \
-    && mkdir -p /var/www/dotly/manager/app/inc/lib
+RUN mkdir -p /var/www/app/site/app/inc/lib \
+    && mkdir -p /var/www/app/manager/app/inc/lib
 
 # Permissões
-RUN chown -R www-data:www-data /var/www/dotly
+RUN chown -R www-data:www-data /var/www/app
 RUN mkdir -p /var/log/nginx && chown -R www-data:www-data /var/log/nginx
 
 # Crontab + entrypoint

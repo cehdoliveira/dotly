@@ -3,7 +3,7 @@
 class MigrationRunner
 {
     private ?\PDO $pdo;
-    private string $migrations_dir = '/var/www/dotly/migrations';
+    private string $migrations_dir = '/var/www/app/migrations';
     private \Closure|Logger $logger;
 
     public function __construct(localPDO|\PDO $pdo, ?string $migrations_dir = null)
@@ -22,7 +22,7 @@ class MigrationRunner
             $possiblePaths = [
                 realpath(__DIR__ . '/../../../../migrations'),
                 $baseDir . '/../migrations',
-                '/var/www/dotly/migrations',
+                '/var/www/app/migrations',
                 getenv('APP_ROOT') ? getenv('APP_ROOT') . '/migrations' : null,
             ];
 
@@ -38,7 +38,7 @@ class MigrationRunner
                 if (is_dir($fallback)) {
                     $this->migrations_dir = $fallback;
                 } else {
-                    $this->migrations_dir = '/var/www/dotly/migrations';
+                    $this->migrations_dir = '/var/www/app/migrations';
                 }
             }
         } else {
