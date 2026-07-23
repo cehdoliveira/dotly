@@ -40,7 +40,7 @@ RUN ln -s /etc/nginx/sites-available/dotly.conf /etc/nginx/sites-enabled/dotly.c
 COPY php.ini /usr/local/etc/php/php.ini
 
 # PHP-FPM pool override — permite getenv() acessar vars do Nginx
-COPY zz-dotly.conf /usr/local/etc/php-fpm.d/zz-dotly.conf
+COPY zz-app.conf /usr/local/etc/php-fpm.d/zz-app.conf
 
 # Diretórios lib
 RUN mkdir -p /var/www/app/site/app/inc/lib \
