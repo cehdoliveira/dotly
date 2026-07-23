@@ -40,9 +40,9 @@ VALUES (
         NOW(),
         '0',
         'yes',
-        'admin@infinnityimportacao.com.br',
+        'admin@dotly.com.br',
         'admin',
         '!disabled!',
-        'Infinnity Importacao Admin',
+        'Dotly Admin',
         'no'
     );

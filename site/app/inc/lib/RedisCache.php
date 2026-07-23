@@ -7,7 +7,7 @@
  * Fornece uma interface simplificada para operações de cache
  * com suporte a serialização automática, TTL e namespaces
  *
- * @package Infinnity Importacao
+ * @package Dotly
  * @version 1.0.0
  */
 
@@ -36,7 +36,7 @@ class RedisCache
         string $host = 'redis',
         int $port = 6379,
         string $password = '',
-        string $prefix = 'infinnityimportacao:',
+        string $prefix = 'dotly:',
         int $database = 0
     ) {
         if (!extension_loaded('redis')) {
@@ -89,7 +89,7 @@ class RedisCache
             $host = $config['host'] ?? (defined('REDIS_HOST') ? constant('REDIS_HOST') : 'redis');
             $port = $config['port'] ?? (defined('REDIS_PORT') ? constant('REDIS_PORT') : 6379);
             $password = $config['password'] ?? (defined('REDIS_PASSWORD') ? constant('REDIS_PASSWORD') : '');
-            $prefix = $config['prefix'] ?? (defined('REDIS_PREFIX') ? constant('REDIS_PREFIX') : 'infinnityimportacao:');
+            $prefix = $config['prefix'] ?? (defined('REDIS_PREFIX') ? constant('REDIS_PREFIX') : 'dotly:');
             $database = $config['database'] ?? (defined('REDIS_DATABASE') ? constant('REDIS_DATABASE') : 0);
 
             self::$instance = new self($host, $port, $password, $prefix, $database);

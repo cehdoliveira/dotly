@@ -1,5 +1,5 @@
 #!/bin/bash
-# Infinnity Importacao pre-commit hook — runs PHPStan on staged PHP files.
+# Dotly pre-commit hook — runs PHPStan on staged PHP files.
 # Setup: git config core.hooksPath .githooks
 #
 # PHPUnit moved to pre-push hook (requires DB connection, too slow for commit).

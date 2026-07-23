@@ -9,8 +9,8 @@
  * Se a extensão rdkafka não estiver disponível, a classe é declarada como stub
  * (métodos retornam false) para não quebrar a aplicação.
  *
- * @package Infinnity Importacao
- * @author Infinnity Importacao Framework
+ * @package Dotly
+ * @author Dotly Framework
  * @version 1.0
  */
 

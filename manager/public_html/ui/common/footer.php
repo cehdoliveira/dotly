@@ -1,17 +1,17 @@
     </main>
 
-    <footer class="infinnityimportacao-footer">
+    <footer class="dotly-footer">
         <div class="container-fluid px-3 px-md-4">
-            <div class="infinnityimportacao-footer-grid">
+            <div class="dotly-footer-grid">
                 <div>
-                    <div class="infinnityimportacao-footer-brand">
-                        <span class="infinnityimportacao-brand-mark small" aria-hidden="true"><i class="bi bi-hexagon"></i></span>
+                    <div class="dotly-footer-brand">
+                        <span class="dotly-brand-mark small" aria-hidden="true"><i class="bi bi-hexagon"></i></span>
                         <div>
                             <strong><?php echo htmlspecialchars(constant("cTitle")); ?></strong>
                         </div>
                     </div>
                 </div>
-                <div class="infinnityimportacao-footer-meta">
+                <div class="dotly-footer-meta">
                     <small class="d-flex align-items-center gap-1">
                         <span class="footer-status-dot"></span>
                         Sistema operacional

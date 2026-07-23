@@ -1,11 +1,11 @@
-# infinnity-importacao
+# Dotly
 
 Whitelabel PHP 8.4 + MySQL 8.0 sobre um framework próprio — **LEGGO**
 (não é Laravel/Symfony) — rodando em Docker. Um único codebase serve dois
 ambientes:
 
-- **site** — `infinnityimportacao.local` — frontend público.
-- **manager** — `manager.infinnityimportacao.local` — painel administrativo.
+- **site** — `dotly.local` — frontend público.
+- **manager** — `manager.dotly.local` — painel administrativo.
 
 Os dois ambientes diferem apenas por `kernel.php`, controllers, rotas e views.
 O framework compartilhado (`app/inc/lib/` e `app/inc/model/`) é idêntico
@@ -20,8 +20,8 @@ cp site/app/inc/kernel.php.example site/app/inc/kernel.php
 # edite os dois kernel.php com as credenciais/constantes locais
 
 # 2. hosts locais — adicione ao /etc/hosts (ou equivalente)
-#   127.0.0.1 infinnityimportacao.local
-#   127.0.0.1 manager.infinnityimportacao.local
+#   127.0.0.1 dotly.local
+#   127.0.0.1 manager.dotly.local
 
 # 3. suba o stack
 docker compose -f docker/docker-compose.yml up -d --build
@@ -42,11 +42,11 @@ cd site    && php app/inc/lib/vendor/bin/phpstan analyse
 # PHPUnit — roda dentro do container, precisa de kernel.php + DB viva
 # (bin/test.sh tem um bug conhecido de working directory; use o comando
 # completo abaixo, que passa -c explícito)
-docker exec -e HTTP_HOST=localhost infinnityimportacao php /var/www/infinnityimportacao/site/app/inc/lib/vendor/bin/phpunit -c /var/www/infinnityimportacao/site/phpunit.xml
-docker exec -e HTTP_HOST=localhost infinnityimportacao php /var/www/infinnityimportacao/manager/app/inc/lib/vendor/bin/phpunit -c /var/www/infinnityimportacao/manager/phpunit.xml
+docker exec -e HTTP_HOST=localhost dotly php /var/www/dotly/site/app/inc/lib/vendor/bin/phpunit -c /var/www/dotly/site/phpunit.xml
+docker exec -e HTTP_HOST=localhost dotly php /var/www/dotly/manager/app/inc/lib/vendor/bin/phpunit -c /var/www/dotly/manager/phpunit.xml
 
 # Migrations (também rodam automaticamente via cron a cada 5min no container)
-docker exec infinnityimportacao php /var/www/infinnityimportacao/site/cgi-bin/run_migrations.php
+docker exec dotly php /var/www/dotly/site/cgi-bin/run_migrations.php
 
 # Instanciar uma nova marca (whitelabel) a partir dos .example
 bin/init-whitelabel.sh --name "Marca" --site-url "https://x.com" --manager-url "https://manager.x.com"

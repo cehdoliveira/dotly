@@ -2,7 +2,7 @@
 
 <body>
     <header>
-        <nav class="navbar infinnityimportacao-navbar">
+        <nav class="navbar dotly-navbar">
             <div class="container-fluid px-4 d-flex align-items-center justify-content-between">
                 <a class="navbar-brand d-flex align-items-center gap-2" href="<?php echo $GLOBALS['home_url']; ?>">
                     <span class="brand-logo" aria-hidden="true"><?php readfile(__DIR__ . '/../../assets/img/logo.svg'); ?></span>

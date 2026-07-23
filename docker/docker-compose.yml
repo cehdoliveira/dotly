@@ -1,7 +1,7 @@
 services:
-  infinnityimportacao:
+  dotly:
     build: ./interface/
-    container_name: infinnityimportacao
+    container_name: dotly
     restart: unless-stopped
     environment:
       - ENABLE_CRON=true
@@ -10,31 +10,35 @@ services:
       - redis
       - kafka
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -H 'Host: infinnityimportacao.local' http://localhost/ >/dev/null && curl -sf -H 'Host: manager.infinnityimportacao.local' http://localhost/ >/dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf -H 'Host: dotly.local' http://localhost/ >/dev/null && curl -sf -H 'Host: manager.dotly.local' http://localhost/ >/dev/null || exit 1",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
     volumes:
       - ../_data/logs/:/var/log/
-      - ../_data/upload/:/var/www/infinnityimportacao/site/public_html/assets/upload/
-      - ../_data/upload/:/var/www/infinnityimportacao/manager/public_html/assets/upload/
-      - ../site/public_html/:/var/www/infinnityimportacao/site/public_html/
-      - ../site/app/:/var/www/infinnityimportacao/site/app/
-      - ../site/cgi-bin/:/var/www/infinnityimportacao/site/cgi-bin/
-      - ../site/tests/:/var/www/infinnityimportacao/site/tests/
-      - ../site/phpunit.xml:/var/www/infinnityimportacao/site/phpunit.xml
-      - ../site/phpstan.neon:/var/www/infinnityimportacao/site/phpstan.neon
-      - ../manager/public_html/:/var/www/infinnityimportacao/manager/public_html/
-      - ../manager/app/:/var/www/infinnityimportacao/manager/app/
-      - ../manager/cgi-bin/:/var/www/infinnityimportacao/manager/cgi-bin/
-      - ../manager/tests/:/var/www/infinnityimportacao/manager/tests/
-      - ../manager/phpunit.xml:/var/www/infinnityimportacao/manager/phpunit.xml
-      - ../manager/phpstan.neon:/var/www/infinnityimportacao/manager/phpstan.neon
-      - ../migrations/:/var/www/infinnityimportacao/migrations/
+      - ../_data/upload/:/var/www/dotly/site/public_html/assets/upload/
+      - ../_data/upload/:/var/www/dotly/manager/public_html/assets/upload/
+      - ../site/public_html/:/var/www/dotly/site/public_html/
+      - ../site/app/:/var/www/dotly/site/app/
+      - ../site/cgi-bin/:/var/www/dotly/site/cgi-bin/
+      - ../site/tests/:/var/www/dotly/site/tests/
+      - ../site/phpunit.xml:/var/www/dotly/site/phpunit.xml
+      - ../site/phpstan.neon:/var/www/dotly/site/phpstan.neon
+      - ../manager/public_html/:/var/www/dotly/manager/public_html/
+      - ../manager/app/:/var/www/dotly/manager/app/
+      - ../manager/cgi-bin/:/var/www/dotly/manager/cgi-bin/
+      - ../manager/tests/:/var/www/dotly/manager/tests/
+      - ../manager/phpunit.xml:/var/www/dotly/manager/phpunit.xml
+      - ../manager/phpstan.neon:/var/www/dotly/manager/phpstan.neon
+      - ../migrations/:/var/www/dotly/migrations/
     ports:
       - "80:80"
     networks:
-      infinnityimportacao:
+      dotly:
         ipv4_address: 172.29.0.3
   # Data Layer
   mysql:
@@ -54,7 +58,7 @@ services:
     expose:
       - "3306"
     networks:
-      infinnityimportacao:
+      dotly:
         ipv4_address: 172.29.0.2
 
   # Cache Layer
@@ -75,7 +79,7 @@ services:
     expose:
       - "6379"
     networks:
-      infinnityimportacao:
+      dotly:
         ipv4_address: 172.29.0.4
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
@@ -112,7 +116,7 @@ services:
       - "9092"
       - "9093"
     networks:
-      infinnityimportacao:
+      dotly:
         ipv4_address: 172.29.0.5
     healthcheck:
       test:
@@ -132,16 +136,16 @@ services:
     depends_on:
       - kafka
     environment:
-      KAFKA_CLUSTERS_0_NAME: infinnityimportacao_cluster
+      KAFKA_CLUSTERS_0_NAME: dotly_cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       DYNAMIC_CONFIG_ENABLED: "false"
     ports:
       - "127.0.0.1:8080:8080"
     networks:
-      infinnityimportacao:
+      dotly:
         ipv4_address: 172.29.0.6
 networks:
-  infinnityimportacao:
+  dotly:
     ipam:
       driver: default
       config:

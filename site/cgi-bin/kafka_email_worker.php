@@ -8,8 +8,8 @@
  *
  * Uso: php kafka_email_worker.php
  *
- * @package Infinnity Importacao
- * @author Infinnity Importacao Framework
+ * @package Dotly
+ * @author Dotly Framework
  * @version 1.0
  */
 
@@ -34,7 +34,7 @@ date_default_timezone_set('America/Sao_Paulo');
 // Simulação de ambiente HTTP para CLI
 // Necessário porque scripts CLI não possuem $_SERVER configurado
 $_SERVER["DOCUMENT_ROOT"] = dirname(__FILE__) . "/../public_html/";
-$_SERVER["HTTP_HOST"] = getenv("CLI_HTTP_HOST") ?: "infinnityimportacao.local";
+$_SERVER["HTTP_HOST"] = getenv("CLI_HTTP_HOST") ?: "dotly.local";
 
 // Ambiente HTTP (padrão)
 putenv('SERVER_PORT=80');
@@ -126,7 +126,7 @@ function sendEmailViaPHPMailer(array $emailData): bool
         // Remetente
         $mail->setFrom(
             defined('mail_from_mail') ? mail_from_mail : 'noreply@localhost',
-            defined('mail_from_name') ? mail_from_name : 'Infinnity Importacao'
+            defined('mail_from_name') ? mail_from_name : 'Dotly'
         );
 
         // Destinatários

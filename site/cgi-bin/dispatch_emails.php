@@ -22,7 +22,7 @@ date_default_timezone_set('America/Sao_Paulo');
 // cRootServer_APP (usado pelo autoload de model/) de $_SERVER["DOCUMENT_ROOT"].
 // Mesmo padrao de cgi-bin/kafka_email_worker.php.
 $_SERVER["DOCUMENT_ROOT"] = dirname(__FILE__) . "/../public_html/";
-$_SERVER["HTTP_HOST"]     = getenv("CLI_HTTP_HOST") ?: "infinnityimportacao.local";
+$_SERVER["HTTP_HOST"]     = getenv("CLI_HTTP_HOST") ?: "dotly.local";
 
 require_once __DIR__ . '/../app/inc/kernel.php';
 require_once __DIR__ . '/../app/inc/lib/vendor/autoload.php';
@@ -39,7 +39,7 @@ $rawPdo = $pdo->getPdo();
 // imediatamente: se outro processo detem o lock, pulamos este ciclo em vez
 // de arriscar 2 dispatchers processando a mesma linha 'pending' ao mesmo
 // tempo (achado da revisao adversarial, plano 016).
-$got = $rawPdo->query("SELECT GET_LOCK('infinnityimportacao_dispatch_emails', 0) AS l")->fetch(\PDO::FETCH_ASSOC);
+$got = $rawPdo->query("SELECT GET_LOCK('dotly_dispatch_emails', 0) AS l")->fetch(\PDO::FETCH_ASSOC);
 if ((int)($got['l'] ?? 0) !== 1) {
     echo "dispatch_emails: outro processo ja esta rodando — pulando este ciclo.\n";
     exit(0);
@@ -94,7 +94,7 @@ try {
     error_log("dispatch_emails: ciclo abortado — " . $e->getMessage());
     echo "dispatch_emails: erro — " . $e->getMessage() . "\n";
 } finally {
-    $rawPdo->query("SELECT RELEASE_LOCK('infinnityimportacao_dispatch_emails')");
+    $rawPdo->query("SELECT RELEASE_LOCK('dotly_dispatch_emails')");
 }
 
 exit(0);

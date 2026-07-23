@@ -6,7 +6,7 @@
 date_default_timezone_set('America/Sao_Paulo');
 
 $_SERVER["DOCUMENT_ROOT"] = dirname(__DIR__) . "/public_html/";
-$_SERVER["HTTP_HOST"] = "manager.infinnityimportacao.local";
+$_SERVER["HTTP_HOST"] = "manager.dotly.local";
 
 putenv('SERVER_PORT=80');
 putenv('SERVER_PROTOCOL=http');

@@ -1,6 +1,6 @@
 {
-  "name": "infinnityimportacao/lib",
-  "description": "Infinnity Importacao Framework — dependências compartilhadas",
+  "name": "dotly/lib",
+  "description": "Dotly Framework — dependências compartilhadas",
   "type": "project",
   "require": {
     "php": ">=8.4",
@@ -15,7 +15,7 @@
   },
   "autoload": {
     "psr-4": {
-      "infinnityimportacao\\": "classes/"
+      "dotly\\": "classes/"
     },
     "files": [
       "Logger.php",

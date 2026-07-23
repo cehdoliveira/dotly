@@ -1,5 +1,5 @@
 /**
- * Infinnity Importacao Site — UI Core
+ * Dotly Site — UI Core
  */
 
 document.addEventListener("DOMContentLoaded", function () {

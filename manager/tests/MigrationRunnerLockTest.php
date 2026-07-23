@@ -67,7 +67,7 @@ final class MigrationRunnerLockTest extends TestCase
     public function testRunSkipsWhenLockHeldElsewhere(): void
     {
         $other = new localPDO();
-        $other->getPdo()->query("SELECT GET_LOCK('infinnityimportacao_migrations', 0)");
+        $other->getPdo()->query("SELECT GET_LOCK('dotly_migrations', 0)");
 
         try {
             $runner = new MigrationRunner($this->con, $this->tmpDir);
@@ -79,7 +79,7 @@ final class MigrationRunnerLockTest extends TestCase
             $this->assertEmpty($results['skipped']);
             $this->assertEmpty($results['failed']);
         } finally {
-            $other->getPdo()->query("SELECT RELEASE_LOCK('infinnityimportacao_migrations')");
+            $other->getPdo()->query("SELECT RELEASE_LOCK('dotly_migrations')");
         }
     }
 }

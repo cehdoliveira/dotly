@@ -1,5 +1,5 @@
 /**
- * Infinnity Importacao - UI Core
+ * Dotly - UI Core
  */
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -42,7 +42,9 @@ function initializeTheme() {
 
   const saved =
     localStorage.getItem(storageKey) ||
-    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    (window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light");
   localStorage.setItem(storageKey, saved);
   applyTheme(saved);
 
@@ -60,13 +62,13 @@ function initializeTheme() {
 }
 
 function injectFloatingThemeToggle() {
-  if (document.querySelector(".infinnityimportacao-theme-toggle-floating")) {
+  if (document.querySelector(".dotly-theme-toggle-floating")) {
     return;
   }
   const floatingButton = document.createElement("button");
   floatingButton.type = "button";
   floatingButton.className =
-    "btn btn-sm infinnityimportacao-theme-toggle infinnityimportacao-theme-toggle-floating";
+    "btn btn-sm dotly-theme-toggle dotly-theme-toggle-floating";
   floatingButton.setAttribute("data-theme-toggle", "true");
   floatingButton.setAttribute("title", "Alternar tema");
   floatingButton.setAttribute("aria-label", "Ativar tema claro");

@@ -33,21 +33,21 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 # Nginx config — remove default, add ours
 RUN rm /etc/nginx/sites-enabled/default
-COPY default.conf /etc/nginx/sites-available/infinnityimportacao.conf
-RUN ln -s /etc/nginx/sites-available/infinnityimportacao.conf /etc/nginx/sites-enabled/infinnityimportacao.conf
+COPY default.conf /etc/nginx/sites-available/dotly.conf
+RUN ln -s /etc/nginx/sites-available/dotly.conf /etc/nginx/sites-enabled/dotly.conf
 
 # PHP config
 COPY php.ini /usr/local/etc/php/php.ini
 
 # PHP-FPM pool override — permite getenv() acessar vars do Nginx
-COPY zz-infinnityimportacao.conf /usr/local/etc/php-fpm.d/zz-infinnityimportacao.conf
+COPY zz-dotly.conf /usr/local/etc/php-fpm.d/zz-dotly.conf
 
 # Diretórios lib
-RUN mkdir -p /var/www/infinnityimportacao/site/app/inc/lib \
-    && mkdir -p /var/www/infinnityimportacao/manager/app/inc/lib
+RUN mkdir -p /var/www/dotly/site/app/inc/lib \
+    && mkdir -p /var/www/dotly/manager/app/inc/lib
 
 # Permissões
-RUN chown -R www-data:www-data /var/www/infinnityimportacao
+RUN chown -R www-data:www-data /var/www/dotly
 RUN mkdir -p /var/log/nginx && chown -R www-data:www-data /var/log/nginx
 
 # Crontab + entrypoint
