@@ -103,8 +103,3 @@ bin/init-whitelabel.sh --name "Marca" --site-url "https://x.com" --manager-url "
   reconfirmação — estoque é movimentado só no checkout, nunca no webhook.
   Não "consertar" o `return true` adicionando validação de assinatura que o
   PSP não oferece.
-
-## Backlog e histórico
-
-Ver [`plans/README.md`](plans/README.md) para o índice de planos de
-melhoria (auditorias, débito técnico, roadmap).
