@@ -35,11 +35,10 @@ CLAUDE.md
 
 
 # ============================================================
-# Documentação interna — NÃO versionar (exceto README.md/AGENTS.md)
+# Documentação interna — NÃO versionar (exceto README.md na raiz)
 # ============================================================
 *.md
-!README.md
-!AGENTS.md
+!/README.md
 # Design docs de features referenciados por código/scripts (não apagar)
 !plans/*.md
 
