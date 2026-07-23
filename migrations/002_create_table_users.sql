@@ -20,11 +20,14 @@ CREATE TABLE IF NOT EXISTS `users` (
     `email_verified_at` DATETIME NULL DEFAULT NULL,
     `email_token_expires_at` DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (`idx`),
-    UNIQUE KEY `mail_UNIQUE` (`mail`)
+    UNIQUE KEY `mail_UNIQUE` (`mail`),
+    UNIQUE KEY `login_UNIQUE` (`login`)
 );
 
 -- INSERT IGNORE: `mail` já é UNIQUE, então uma re-execução desta migration
 -- (ex.: por estado inconsistente em migrations_log) não lança erro de duplicata.
+-- Seed brand-neutral: nome 'Admin' e email 'admin@example.com' (placeholders
+-- substituíveis pelo init-whitelabel.sh).
 INSERT IGNORE INTO
     `users` (
         `created_at`,
@@ -40,9 +43,9 @@ VALUES (
         NOW(),
         '0',
         'yes',
-        'admin@dotly.com.br',
+        'admin@example.com',
         'admin',
         '!disabled!',
-        'Dotly Admin',
+        'Admin',
         'no'
     );
