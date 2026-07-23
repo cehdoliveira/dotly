@@ -18,7 +18,7 @@
 // Simulação de ambiente HTTP para CLI — necessário porque scripts CLI não
 // possuem $_SERVER configurado (mesmo padrão de kafka_email_worker.php).
 $_SERVER["DOCUMENT_ROOT"] = dirname(__FILE__) . "/../public_html/";
-$_SERVER["HTTP_HOST"]     = getenv("CLI_HTTP_HOST") ?: "manager.dotly.local";
+$_SERVER["HTTP_HOST"]     = getenv("CLI_HTTP_HOST") ?: "";
 
 define('APP_PATH', realpath(__DIR__ . '/../app'));
 
