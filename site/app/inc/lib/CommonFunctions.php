@@ -433,7 +433,7 @@ function ratelimit_fallback_dir(): string
   if (defined('RATELIMIT_FALLBACK_DIR') && constant('RATELIMIT_FALLBACK_DIR') !== '') {
     return rtrim(constant('RATELIMIT_FALLBACK_DIR'), '/');
   }
-  return sys_get_temp_dir() . '/dotly_ratelimit';
+  return sys_get_temp_dir() . '/app_ratelimit';
 }
 
 // Atomic check+increment: increments first to prevent race condition bypass.
@@ -613,7 +613,7 @@ function handle_upload(array $file, string $subDir, array $options = []): string
     return false;
   }
 
-  $uploadBase = defined('UPLOAD_DIR') ? rtrim(constant('UPLOAD_DIR'), '/') : sys_get_temp_dir() . '/dotly_upload';
+  $uploadBase = defined('UPLOAD_DIR') ? rtrim(constant('UPLOAD_DIR'), '/') : sys_get_temp_dir() . '/app_upload';
   $uploadDir  = $uploadBase . '/' . $subDir;
 
   if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {

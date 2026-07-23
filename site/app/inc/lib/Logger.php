@@ -18,7 +18,7 @@ class Logger
     private string $channel;
     private static ?Logger $instance = null;
 
-    public function __construct(string $channel = 'dotly')
+    public function __construct(string $channel = 'app')
     {
         $this->channel = $channel;
         $this->minLevel = defined('LOG_LEVEL') ? constant('LOG_LEVEL') : self::INFO;
