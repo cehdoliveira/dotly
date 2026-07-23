@@ -7,14 +7,14 @@ ini_set("default_charset", "UTF-8");
 // AVISO: Copie este arquivo para kernel.php e preencha com suas credenciais reais.
 // NUNCA commite kernel.php com dados sensíveis.
 define("DB_HOST", "mysql");
-define("DB_NAME", "db_dotly");
-define("DB_USER", "user_dotly");
+define("DB_NAME", "db_app");
+define("DB_USER", "user_app");
 define("DB_PASS", "SUA_SENHA_AQUI");
 
 // ===== REDIS =====
 define("REDIS_HOST", "redis");
 define("REDIS_PORT", 6379);
-define("REDIS_PREFIX", "dotly:manager:");
+define("REDIS_PREFIX", "app:manager:");
 define("REDIS_DATABASE", 0);
 define("REDIS_ENABLED", true);
 define("REDIS_DEFAULT_TTL", 3600);
@@ -22,11 +22,11 @@ define("REDIS_DEFAULT_TTL", 3600);
 // ===== KAFKA =====
 define("KAFKA_HOST", "kafka");
 define("KAFKA_PORT", "9092");
-define("KAFKA_TOPIC_EMAIL", "dotly_manager_emails");
-define("KAFKA_CONSUMER_GROUP", "dotly-manager-email-worker-group");
+define("KAFKA_TOPIC_EMAIL", "app_manager_emails");
+define("KAFKA_CONSUMER_GROUP", "app-manager-email-worker-group");
 
 // ===== EMAIL (SMTP) =====
-define("mail_from_name", "dotly Manager");
+define("mail_from_name", "App");
 define("mail_from_mail", "seu_email@exemplo.com");
 define("mail_from_host", "smtp.gmail.com");
 define("mail_from_port", "587");
@@ -42,8 +42,8 @@ define("whatsapp_number", "5511999999999");
 define("whatsapp_display", "+55 (11) 99999-9999");
 
 // ===== APLICAÇÃO =====
-define("cAppKey", "dotly_manager_session");
-define("cTitle", "dotly Manager");
+define("cAppKey", "app_manager_session");
+define("cTitle", "App");
 // Marca da LOJA (voltada ao cliente) — MESMO valor do site, NAO o titulo do painel.
 // order_shipped e disparado no manager; usa esta constante para nao vazar o nome
 // do painel pro cliente.
@@ -66,8 +66,8 @@ if (
 // Definido ANTES da validacao de Host abaixo (que usa esta constante) e antes de
 // cFrontend (que deriva de HTTP_HOST). PRODUÇÃO: defina obrigatoriamente; se vazio
 // E MANAGER_CANONICAL_URL vazio, canonical_url() lança exceção (fail closed) para
-// impedir poisoning via Host header. Exemplo: "dotly.com.br,manager.dotly.com.br,www.dotly.com.br"
-define("ALLOWED_HOSTS", "manager.dotly.local");
+// impedir poisoning via Host header. Exemplo: "exemplo.com,manager.exemplo.com,www.exemplo.com"
+define("ALLOWED_HOSTS", "localhost");
 
 // Validar HTTP_HOST contra ALLOWED_HOSTS para prevenir Host Header Injection.
 if (defined('ALLOWED_HOSTS') && constant('ALLOWED_HOSTS') !== '') {
@@ -99,8 +99,8 @@ define("UPLOAD_ALLOWED_TYPES", "jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx");
 // DEVE ser definida explicitamente para evitar Host Header Injection.
 // PRODUÇÃO: defina obrigatoriamente. Se vazio E ALLOWED_HOSTS vazio, canonical_url() lança
 // exceção (fail closed) para impedir poisoning via Host header.
-// Exemplo produção: "https://manager.dotly.com.br"
-define("MANAGER_CANONICAL_URL", "http://manager.dotly.local");
+// Exemplo produção: "https://manager.exemplo.com"
+define("MANAGER_CANONICAL_URL", "http://localhost");
 
 // ===== SESSÃO =====
 define("SESSION_LIFETIME", 7200);

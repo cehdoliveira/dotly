@@ -126,26 +126,26 @@ E_MANAGER_HOSTS="$(escape_repl "$MANAGER_HOSTS")"
 
 cp "$SITE_EXAMPLE" "$SITE_KERNEL"
 sed -i \
-    -e "s#define(\"mail_from_name\", \"dotly\");#define(\"mail_from_name\", \"${E_BRAND_NAME}\");#" \
-    -e "s#define(\"cAppKey\", \"dotly_site_session\");#define(\"cAppKey\", \"${E_SLUG}_site_session\");#" \
-    -e "s#define(\"cTitle\", \"dotly\");#define(\"cTitle\", \"${E_BRAND_NAME}\");#" \
-    -e "s#define(\"ALLOWED_HOSTS\", \"dotly.local\");#define(\"ALLOWED_HOSTS\", \"${E_SITE_HOSTS}\");#" \
-    -e "s#define(\"SITE_CANONICAL_URL\", \"http://dotly.local\");#define(\"SITE_CANONICAL_URL\", \"${E_SITE_URL}\");#" \
-    -e "s#define(\"REDIS_PREFIX\", \"dotly:site:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:site:\");#" \
-    -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"dotly_site_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_site_emails\");#" \
-    -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"dotly-site-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-site-email-worker-group\");#" \
+    -e "s#define(\"mail_from_name\", \"App\");#define(\"mail_from_name\", \"${E_BRAND_NAME}\");#" \
+    -e "s#define(\"cAppKey\", \"app_site_session\");#define(\"cAppKey\", \"${E_SLUG}_site_session\");#" \
+    -e "s#define(\"cTitle\", \"App\");#define(\"cTitle\", \"${E_BRAND_NAME}\");#" \
+    -e "s#define(\"ALLOWED_HOSTS\", \"localhost\");#define(\"ALLOWED_HOSTS\", \"${E_SITE_HOSTS}\");#" \
+    -e "s#define(\"SITE_CANONICAL_URL\", \"http://localhost\");#define(\"SITE_CANONICAL_URL\", \"${E_SITE_URL}\");#" \
+    -e "s#define(\"REDIS_PREFIX\", \"app:site:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:site:\");#" \
+    -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"app_site_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_site_emails\");#" \
+    -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"app-site-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-site-email-worker-group\");#" \
     "$SITE_KERNEL"
 
 cp "$MANAGER_EXAMPLE" "$MANAGER_KERNEL"
 sed -i \
-    -e "s#define(\"mail_from_name\", \"dotly Manager\");#define(\"mail_from_name\", \"${E_BRAND_NAME} Manager\");#" \
-    -e "s#define(\"cAppKey\", \"dotly_manager_session\");#define(\"cAppKey\", \"${E_SLUG}_manager_session\");#" \
-    -e "s#define(\"cTitle\", \"dotly Manager\");#define(\"cTitle\", \"${E_BRAND_NAME} Manager\");#" \
-    -e "s#define(\"ALLOWED_HOSTS\", \"manager.dotly.local\");#define(\"ALLOWED_HOSTS\", \"${E_MANAGER_HOSTS}\");#" \
-    -e "s#define(\"MANAGER_CANONICAL_URL\", \"http://manager.dotly.local\");#define(\"MANAGER_CANONICAL_URL\", \"${E_MANAGER_URL}\");#" \
-    -e "s#define(\"REDIS_PREFIX\", \"dotly:manager:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:manager:\");#" \
-    -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"dotly_manager_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_manager_emails\");#" \
-    -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"dotly-manager-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-manager-email-worker-group\");#" \
+    -e "s#define(\"mail_from_name\", \"App\");#define(\"mail_from_name\", \"${E_BRAND_NAME}\");#" \
+    -e "s#define(\"cAppKey\", \"app_manager_session\");#define(\"cAppKey\", \"${E_SLUG}_manager_session\");#" \
+    -e "s#define(\"cTitle\", \"App\");#define(\"cTitle\", \"${E_BRAND_NAME}\");#" \
+    -e "s#define(\"ALLOWED_HOSTS\", \"localhost\");#define(\"ALLOWED_HOSTS\", \"${E_MANAGER_HOSTS}\");#" \
+    -e "s#define(\"MANAGER_CANONICAL_URL\", \"http://localhost\");#define(\"MANAGER_CANONICAL_URL\", \"${E_MANAGER_URL}\");#" \
+    -e "s#define(\"REDIS_PREFIX\", \"app:manager:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:manager:\");#" \
+    -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"app_manager_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_manager_emails\");#" \
+    -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"app-manager-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-manager-email-worker-group\");#" \
     "$MANAGER_KERNEL"
 
 echo "Gerado: $SITE_KERNEL"
