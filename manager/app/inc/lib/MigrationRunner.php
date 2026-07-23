@@ -65,7 +65,7 @@ class MigrationRunner
         // GET_LOCK(..., 0) retorna imediatamente: se outro processo (ex.: tick
         // anterior do cron ainda rodando) detém o lock, recebemos int(0) e pulamos.
         $got = $this->pdo
-            ->query("SELECT GET_LOCK('dotly_migrations', 0) AS l")
+            ->query("SELECT GET_LOCK('app_migrations', 0) AS l")
             ->fetch(\PDO::FETCH_ASSOC);
         if ((int) ($got['l'] ?? 0) !== 1) {
             $this->log("Outro processo de migration está em execução — pulando este ciclo.");
@@ -110,7 +110,7 @@ class MigrationRunner
                 }
             }
         } finally {
-            $this->pdo->query("SELECT RELEASE_LOCK('dotly_migrations')");
+            $this->pdo->query("SELECT RELEASE_LOCK('app_migrations')");
         }
 
         return $results;

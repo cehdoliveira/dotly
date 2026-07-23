@@ -137,9 +137,9 @@ final class CommonFunctionsTest extends TestCase
         // definida (vazia) pelo kernel de teste, o que dispararia o fail-closed
         // de canonical_url. Uma constante própria garante o branch "configurado".
         if (!defined('TEST_CANONICAL_URL')) {
-            define('TEST_CANONICAL_URL', 'http://dotly.local');
+            define('TEST_CANONICAL_URL', 'http://app.local');
         }
-        $this->assertSame('http://dotly.local', canonical_url('TEST_CANONICAL_URL'));
+        $this->assertSame('http://app.local', canonical_url('TEST_CANONICAL_URL'));
     }
 
     /**

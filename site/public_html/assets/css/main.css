@@ -1,8 +1,6 @@
 /* ================================================
-   INFINNITY IMPORTACAO — Design System
-   Palette: índigo (#2E2B6E) sobre claro (#F7F7FB) — tema único, sem dark.
-   Font: Plus Jakarta Sans (display/corpo) + DM Mono (dados: preço, categoria, código)
-   Tokens canônicos do whitelabel — mesmos NOMES no manager (valores podem diferir).
+   Site — Design System
+   Theme tokens canônicos do whitelabel (valores via init-whitelabel.sh).
    ================================================ */
 
 /* Esconde elementos Alpine ate o framework hidratar (evita flash de estado). */

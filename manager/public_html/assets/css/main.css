@@ -1,8 +1,6 @@
 /* ================================================
-   INFINNITY IMPORTACAO Manager — Admin Styles
-   Palette: índigo (#2e2b6e) / light (default) / dark
-   Font: Plus Jakarta Sans (display/corpo) + DM Mono (dados)
-   Tokens canônicos do whitelabel — mesmos NOMES do site (valores podem diferir).
+   Manager — Admin Styles
+   Theme tokens canônicos do whitelabel (valores via init-whitelabel.sh).
    ================================================ */
 
 :root {
@@ -162,7 +160,7 @@ h6 {
 }
 
 /* Navbar */
-.dotly-navbar {
+.ss-navbar {
   background-color: var(--navbar-bg);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -170,7 +168,7 @@ h6 {
   z-index: 1030;
 }
 
-.dotly-navbar .navbar-brand {
+.ss-navbar .navbar-brand {
   color: var(--text);
 }
 
@@ -190,13 +188,13 @@ h6 {
 /* Mobile: aperta o padding do navbar e evita que a marca empurre os controles
    (tema/config/sair) para fora da tela em telas estreitas. */
 @media (max-width: 575.98px) {
-  .dotly-navbar .container-fluid {
+  .ss-navbar .container-fluid {
     padding-left: 0.85rem;
     padding-right: 0.85rem;
     gap: 0.5rem;
   }
 
-  .dotly-navbar .navbar-brand {
+  .ss-navbar .navbar-brand {
     min-width: 0;
   }
 
@@ -208,7 +206,7 @@ h6 {
 }
 
 /* Footer */
-.dotly-footer {
+.ss-footer {
   background-color: var(--footer-bg);
   color: var(--footer-text);
   padding: 0.6rem 0;
@@ -217,7 +215,7 @@ h6 {
   font-size: 0.72rem;
 }
 
-.dotly-footer-grid {
+.ss-footer-grid {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -225,18 +223,18 @@ h6 {
   gap: 0.5rem;
 }
 
-.dotly-footer-brand {
+.ss-footer-brand {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   color: var(--footer-text);
 }
 
-.dotly-brand-mark {
+.ss-brand-mark {
   color: var(--accent);
 }
 
-.dotly-footer-meta {
+.ss-footer-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;

@@ -1,5 +1,5 @@
 /**
- * Dotly Site — UI Core
+ * Site — UI Core
  */
 
 document.addEventListener("DOMContentLoaded", function () {

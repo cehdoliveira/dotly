@@ -6,7 +6,23 @@
 date_default_timezone_set('America/Sao_Paulo');
 
 $_SERVER["DOCUMENT_ROOT"] = dirname(__DIR__) . "/public_html/";
-$_SERVER["HTTP_HOST"] = "manager.dotly.local";
+// HTTP_HOST precisa ser valido segundo ALLOWED_HOSTS do kernel, senao o guard
+// anti-Host-Injection devolve 400 e o boot do PHPUnit morre antes do 1o teste.
+// Le o primeiro host de ALLOWED_HOSTS direto do kernel (real se existir, senao
+// example) para ser brand-agnostic apos whitelabel.
+(function () {
+	$kernelFile = __DIR__ . '/../app/inc/kernel.php';
+	if (!file_exists($kernelFile)) {
+		$kernelFile = __DIR__ . '/../app/inc/kernel.php.example';
+	}
+	$src = file_get_contents($kernelFile);
+	if (preg_match('/define\(\s*["\']ALLOWED_HOSTS["\']\s*,\s*["\']([^"\']+)["\']/', $src, $m)) {
+		$hosts = explode(',', $m[1]);
+		$_SERVER["HTTP_HOST"] = trim($hosts[0]);
+	} else {
+		$_SERVER["HTTP_HOST"] = 'localhost';
+	}
+})();
 
 putenv('SERVER_PORT=80');
 putenv('SERVER_PROTOCOL=http');

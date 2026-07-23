@@ -1,6 +1,6 @@
 {
-  "name": "dotly/lib",
-  "description": "Dotly Framework — dependências compartilhadas",
+  "name": "app/lib",
+  "description": "Framework compartilhado — dependências",
   "type": "project",
   "require": {
     "php": ">=8.4",
@@ -15,7 +15,7 @@
   },
   "autoload": {
     "psr-4": {
-      "dotly\\": "classes/"
+      "App\\": "classes/"
     },
     "files": [
       "Logger.php",

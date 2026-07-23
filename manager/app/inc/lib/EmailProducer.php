@@ -9,8 +9,8 @@
  * Se a extensão rdkafka não estiver disponível, a classe é declarada como stub
  * (métodos retornam false) para não quebrar a aplicação.
  *
- * @package Dotly
- * @author Dotly Framework
+ * @package App
+ * @author App Framework
  * @version 1.0
  */
 

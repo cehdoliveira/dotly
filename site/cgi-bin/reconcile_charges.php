@@ -25,7 +25,7 @@ date_default_timezone_set('America/Sao_Paulo');
 // cRootServer_APP (usado pelo autoload de model/) de $_SERVER["DOCUMENT_ROOT"].
 // Mesmo padrao de cgi-bin/dispatch_emails.php e expire_orders.php.
 $_SERVER["DOCUMENT_ROOT"] = dirname(__FILE__) . "/../public_html/";
-$_SERVER["HTTP_HOST"]     = getenv("CLI_HTTP_HOST") ?: "dotly.local";
+$_SERVER["HTTP_HOST"]     = getenv("CLI_HTTP_HOST") ?: "";
 
 require_once __DIR__ . '/../app/inc/kernel.php';
 require_once __DIR__ . '/../app/inc/lib/vendor/autoload.php';
@@ -37,7 +37,7 @@ $rawPdo = $pdo->getPdo();
 // competir pelo mesmo lock. GET_LOCK(...,0) retorna imediatamente: se outro
 // processo detem o lock, pulamos este ciclo em vez de arriscar 2 execucoes
 // confirmando a mesma cobranca ao mesmo tempo.
-$got = $rawPdo->query("SELECT GET_LOCK('dotly_reconcile_charges', 0) AS l")->fetch(\PDO::FETCH_ASSOC);
+$got = $rawPdo->query("SELECT GET_LOCK('app_reconcile_charges', 0) AS l")->fetch(\PDO::FETCH_ASSOC);
 if ((int)($got['l'] ?? 0) !== 1) {
     echo "reconcile_charges: outro processo ja esta rodando — pulando este ciclo.\n";
     exit(0);
@@ -60,7 +60,7 @@ try {
     error_log("reconcile_charges: ciclo abortado — " . $e->getMessage());
     echo "reconcile_charges: erro — " . $e->getMessage() . "\n";
 } finally {
-    $rawPdo->query("SELECT RELEASE_LOCK('dotly_reconcile_charges')");
+    $rawPdo->query("SELECT RELEASE_LOCK('app_reconcile_charges')");
 }
 
 exit(0);
