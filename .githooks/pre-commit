@@ -1,0 +1,42 @@
+#!/bin/bash
+# Infinnity Importacao pre-commit hook — runs PHPStan on staged PHP files.
+# Setup: git config core.hooksPath .githooks
+#
+# PHPUnit moved to pre-push hook (requires DB connection, too slow for commit).
+
+set -e
+
+STAGED_PHP=$(git diff --cached --name-only --diff-filter=ACM | grep '\.php$' || true)
+
+if [ -z "$STAGED_PHP" ]; then
+    exit 0
+fi
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+# Drift guard: lib/ e model/ devem ser identicos entre manager/ e site/.
+echo "→ Verificando sincronia de lib/model (manager vs site)..."
+if bash "$(git rev-parse --show-toplevel)/bin/check-shared-sync.sh"; then
+    echo -e "${GREEN}  Shared lib/model em sincronia${NC}"
+else
+    echo -e "${RED}  DRIFT detectado em lib/model — commit bloqueado${NC}"
+    echo -e "${RED}  Edite as duas copias (manager/ e site/) antes de commitar.${NC}"
+    exit 1
+fi
+
+for DIR in manager site; do
+    # PHPStan (fast static analysis — no DB needed)
+    if [ -f "$DIR/phpstan.neon" ]; then
+        echo "→ PHPStan ($DIR)..."
+        if HTTP_HOST=localhost php -d memory_limit=512M "$DIR/app/inc/lib/vendor/bin/phpstan" analyse -c "$DIR/phpstan.neon" --no-progress --no-interaction 2>&1; then
+            echo -e "${GREEN}  PHPStan OK${NC}"
+        else
+            echo -e "${RED}  PHPStan FAILED — commit blocked${NC}"
+            exit 1
+        fi
+    fi
+done
+
+echo -e "${GREEN}Pre-commit checks passed.${NC}"

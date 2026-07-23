@@ -1,0 +1,139 @@
+<?php
+// ===== TIMEZONE E ENCODING =====
+date_default_timezone_set("America/Sao_Paulo");
+ini_set("default_charset", "UTF-8");
+
+// ===== BANCO DE DADOS =====
+// AVISO: Copie este arquivo para kernel.php e preencha com suas credenciais reais.
+// NUNCA commite kernel.php com dados sensíveis.
+define("DB_HOST", "mysql");
+define("DB_NAME", "db_infinnityimportacao");
+define("DB_USER", "user_infinnityimportacao");
+define("DB_PASS", "SUA_SENHA_AQUI");
+
+// ===== REDIS =====
+define("REDIS_HOST", "redis");
+define("REDIS_PORT", 6379);
+define("REDIS_PREFIX", "infinnityimportacao:site:");
+define("REDIS_DATABASE", 0);
+define("REDIS_ENABLED", true);
+define("REDIS_DEFAULT_TTL", 3600);
+
+// ===== KAFKA =====
+define("KAFKA_HOST", "kafka");
+define("KAFKA_PORT", "9092");
+define("KAFKA_TOPIC_EMAIL", "infinnityimportacao_site_emails");
+define("KAFKA_CONSUMER_GROUP", "infinnityimportacao-site-email-worker-group");
+
+// ===== EMAIL (SMTP) =====
+define("mail_from_name", "infinnityimportacao");
+define("mail_from_mail", "seu_email@exemplo.com");
+define("mail_from_host", "smtp.gmail.com");
+define("mail_from_port", "587");
+define("mail_from_user", "seu_email@exemplo.com");
+define("mail_from_pwd", "SUA_APP_PASSWORD_AQUI");
+define("mail_encryption", "tls");
+
+// ===== CONTATO (WhatsApp) =====
+// Numero unico da plataforma (footer, tela de pago, e-mails). Trocar aqui
+// atualiza tudo. whatsapp_number = so digitos (DDI+DDD+numero) para wa.me;
+// whatsapp_display = como aparece pro cliente.
+define("whatsapp_number", "5511999999999");
+define("whatsapp_display", "+55 (11) 99999-9999");
+
+// ===== GATEWAYS DE PAGAMENTO (PIX) =====
+// Preencha com as chaves reais de cada PSP. Cada gateway e fail-closed: enquanto a
+// constante estiver vazia, o checkout recusa aquele gateway (RuntimeException
+// "... nao configurado"). Habilite/desabilite os gateways na tabela payment_gateways
+// (coluna enabled = 'yes'/'no'); o GatewayRouter sorteia entre os habilitados.
+// Deixe habilitado APENAS o(s) gateway(s) com credencial preenchida aqui.
+
+// MercadoPago (modo qr — PIX na propria tela)
+define("MP_ACCESS_TOKEN", "");
+define("MP_WEBHOOK_SECRET", "");
+
+// PagBank (modo qr — PIX na propria tela)
+// PAGBANK_API_BASE: https://sandbox.api.pagseguro.com (teste) ou https://api.pagseguro.com (producao)
+define("PAGBANK_API_BASE", "");
+define("PAGBANK_TOKEN", "");
+
+// ATENCAO: o endpoint de webhook do InfinitePay (/webhook/pix/infinitepay) e
+// PUBLICO POR DESIGN — o PSP nao publica assinatura de webhook. A autenticacao
+// real e a reconfirmacao POST /payment_check (fail-closed) feita pelo
+// webhook_controller antes de qualquer escrita; ver README (secao de
+// arquitetura) e InfinitePayGateway::verifyWebhook().
+// InfinitePay (modo redirect — leva ao checkout do InfinitePay)
+define("INFINITEPAY_HANDLE", "");
+
+// ===== APLICAÇÃO =====
+define("cAppKey", "infinnityimportacao_site_session");
+define("cTitle", "infinnityimportacao");
+// Marca da LOJA (voltada ao cliente): MESMO valor nos dois ambientes (o cTitle
+// do manager e o titulo do painel). Usada em e-mails do cliente e no footer.
+define("cStoreName", "Sua Loja");
+define("cAppRoot", "/");
+define("cRootServer", sprintf("%s%s", $_SERVER["DOCUMENT_ROOT"], constant("cAppRoot")));
+define("cRootServer_APP", sprintf("%s%s", $_SERVER["DOCUMENT_ROOT"], constant("cAppRoot") . "../app"));
+
+// Detecta HTTPS mesmo atrás de reverse proxy (Traefik com SSL termination).
+// O Apache propaga X-Forwarded-Proto via SetEnvIf, populando $_SERVER['HTTPS'].
+$_detected_protocol = 'http';
+if (
+    (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') ||
+    (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') ||
+    (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+) {
+    $_detected_protocol = 'https';
+}
+// ===== SEGURANÇA: ALLOWED_HOSTS =====
+// Definido ANTES da validacao de Host abaixo (que usa esta constante) e antes de
+// cFrontend (que deriva de HTTP_HOST). PRODUÇÃO: defina obrigatoriamente; se vazio
+// E SITE_CANONICAL_URL vazio, canonical_url() lança exceção (fail closed) para
+// impedir poisoning via Host header. Exemplo: "infinnityimportacao.com.br,www.infinnityimportacao.com.br"
+define("ALLOWED_HOSTS", "infinnityimportacao.local");
+
+// Validar HTTP_HOST contra ALLOWED_HOSTS para prevenir Host Header Injection.
+if (defined('ALLOWED_HOSTS') && constant('ALLOWED_HOSTS') !== '') {
+	$allowedHosts = array_map('trim', explode(',', constant('ALLOWED_HOSTS')));
+	$requestHost = $_SERVER["HTTP_HOST"] ?? '';
+	if ($requestHost !== '' && !in_array($requestHost, $allowedHosts, true)) {
+		header('HTTP/1.1 400 Bad Request');
+		exit('Invalid host header');
+	}
+}
+define("cFrontend", sprintf("%s://%s%s", $_detected_protocol, $_SERVER["HTTP_HOST"] ?? "localhost", constant("cAppRoot")));
+unset($_detected_protocol);
+define("cAssets", sprintf("%s%s", constant("cFrontend"), "assets/"));
+
+define("DEFAULT_USER_PROFILE_ID", 2);
+define("APP_VERSION", "1.8.1.0");
+
+// ===== LOG =====
+define("LOG_LEVEL", "info"); // debug, info, warning, error
+
+// ===== UPLOAD =====
+define("UPLOAD_DIR", "/var/www/infinnityimportacao/site/public_html/assets/upload/");
+define("UPLOAD_MAX_SIZE", 10);
+define("UPLOAD_ALLOWED_TYPES", "jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx");
+
+// ===== SEGURANÇA =====
+// URL canônica do site — usada para links em e-mails de verificação e redefinição de senha.
+// DEVE ser definida explicitamente para evitar Host Header Injection.
+// PRODUÇÃO: defina obrigatoriamente. Se vazio E ALLOWED_HOSTS vazio, canonical_url() lança
+// exceção (fail closed) para impedir poisoning via Host header.
+// Exemplo produção: "https://infinnityimportacao.com.br"
+define("SITE_CANONICAL_URL", "http://infinnityimportacao.local");
+
+// ===== SESSÃO =====
+define("SESSION_LIFETIME", 7200);
+define("SESSION_USE_REDIS", false);
+
+// ===== INICIALIZAR REDIS =====
+if (REDIS_ENABLED && class_exists("RedisCache")) {
+    try {
+        $GLOBALS["redis"] = RedisCache::getInstance();
+    } catch (Exception $e) {
+        error_log("Redis Error: " . $e->getMessage());
+        $GLOBALS["redis"] = null;
+    }
+}

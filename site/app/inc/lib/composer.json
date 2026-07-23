@@ -1,0 +1,39 @@
+{
+  "name": "infinnityimportacao/lib",
+  "description": "Infinnity Importacao Framework — dependências compartilhadas",
+  "type": "project",
+  "require": {
+    "php": ">=8.4",
+    "phpmailer/phpmailer": "^6.9"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.0",
+    "phpunit/phpunit": "^11.0"
+  },
+  "suggest": {
+    "ext-rdkafka": "Para envio assíncrono de emails via Kafka"
+  },
+  "autoload": {
+    "psr-4": {
+      "infinnityimportacao\\": "classes/"
+    },
+    "files": [
+      "Logger.php",
+      "CommonFunctions.php",
+      "localPDO.php",
+      "rootOBJ.php",
+      "DOLModel.php",
+      "RedisCache.php",
+      "EmailProducer.php",
+      "Dispatcher.php"
+    ]
+  },
+  "config": {
+    "vendor-dir": "vendor",
+    "optimize-autoloader": true,
+    "preferred-install": "dist",
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

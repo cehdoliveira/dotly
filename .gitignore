@@ -1,0 +1,58 @@
+# ============================================================
+# Configurações sensíveis — NÃO versionar
+# ============================================================
+site/app/inc/kernel.php
+manager/app/inc/kernel.php
+docker/.env
+
+
+# ============================================================
+# Dependências Composer
+# ============================================================
+site/app/inc/lib/vendor/
+manager/app/inc/lib/vendor/
+
+
+# ============================================================
+# Dados de runtime do Docker (MySQL, Redis, Kafka, logs)
+# ============================================================
+_data/
+
+
+# ============================================================
+# Uploads de usuários
+# ============================================================
+site/public_html/assets/upload/
+manager/public_html/assets/upload/
+
+
+# ============================================================
+# Claude Code
+# ============================================================
+.claude/
+.gstack
+CLAUDE.md
+
+
+# ============================================================
+# Documentação interna — NÃO versionar (exceto README.md/AGENTS.md)
+# ============================================================
+*.md
+!README.md
+!AGENTS.md
+# Design docs de features referenciados por código/scripts (não apagar)
+!plans/*.md
+
+
+# ============================================================
+# OS / Editor
+# ============================================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# PHPUnit cache
+.phpunit.result.cache

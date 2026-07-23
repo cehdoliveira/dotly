@@ -1,0 +1,1153 @@
+/* ================================================
+   INFINNITY IMPORTACAO Manager — Dashboard
+   Palette: índigo (#2e2b6e) / light (default) / dark
+   ================================================ */
+
+.dashboard-wrapper {
+    padding: 1.5rem 0;
+}
+
+.page-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.875rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-header h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+    letter-spacing: -0.02em;
+}
+
+.page-header p {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin: 0;
+}
+
+/* Stat cards */
+.stat-card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    transition: border-color 0.12s;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+}
+
+.stat-card::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.stat-card:hover {
+    border-color: var(--accent);
+}
+
+.stat-card:hover::after {
+    opacity: 1;
+}
+
+.stat-card .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.stat-card .stat-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--text);
+    letter-spacing: -0.04em;
+}
+
+.stat-card .stat-label {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+}
+
+/* Bootstrap bg-* overrides */
+.stat-card .bg-primary {
+    background-color: rgba(var(--accent-rgb), 0.1) !important;
+}
+
+.stat-card .text-primary {
+    color: var(--accent) !important;
+}
+
+.stat-card .bg-success {
+    background-color: rgba(var(--success-rgb), 0.08) !important;
+}
+
+.stat-card .text-success {
+    color: var(--success) !important;
+}
+
+.stat-card .bg-warning {
+    background-color: rgba(var(--warning-rgb), 0.08) !important;
+}
+
+.stat-card .text-warning {
+    color: var(--warning) !important;
+}
+
+.stat-card .bg-danger {
+    background-color: rgba(var(--error-rgb), 0.08) !important;
+}
+
+.stat-card .text-danger {
+    color: var(--error) !important;
+}
+
+.stat-card .bg-info {
+    background-color: rgba(var(--info-rgb), 0.08) !important;
+}
+
+.stat-card .text-info {
+    color: var(--info) !important;
+}
+
+/* Content panels */
+.content-panel {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    overflow: hidden;
+    /* Containing block para o <span class="visually-hidden"> do cabecalho
+       "Acoes": sem ancestral posicionado ele ancora no viewport na posicao
+       estatica dentro da tabela larga (~850px) e ESCAPA do clip do
+       .table-responsive, estourando a pagina no mobile. Ver /pedidos. */
+    position: relative;
+}
+
+.content-panel-header {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    background-color: var(--surface-2);
+}
+
+.content-panel-body {
+    padding: 1rem;
+}
+
+.content-panel-footer {
+    border-top: 1px solid var(--border);
+    background-color: var(--surface-2);
+}
+
+/* Tables */
+.table {
+    color: var(--text);
+    font-size: 0.825rem;
+}
+
+.table> :not(caption)>*>* {
+    background-color: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.table thead th {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    background-color: var(--surface-2);
+}
+
+/* Cabeçalhos ordenáveis (/pedidos): o header vira afordância de ordenação.
+   Colunas inativas trazem um chevron apagado; a coluna ativa acende no accent. */
+.orders-th-sortable {
+    padding: 0;
+}
+
+.orders-sort-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.1s;
+}
+
+.orders-sort-link:hover,
+.orders-sort-link:focus-visible {
+    color: var(--accent);
+}
+
+.orders-sort-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.orders-sort-icon {
+    font-size: 0.7rem;
+    opacity: 0.3;
+    transition: opacity 0.1s;
+}
+
+.orders-sort-link:hover .orders-sort-icon {
+    opacity: 0.7;
+}
+
+.orders-sort-link.is-active,
+.orders-sort-link.is-active .orders-sort-icon {
+    color: var(--accent);
+    opacity: 1;
+}
+
+.orders-action-label {
+    margin-left: 0.3rem;
+    font-size: 0.78rem;
+}
+
+.table-hover > tbody > tr:hover > * {
+    background-color: rgba(var(--accent-rgb), 0.04);
+    color: var(--text);
+}
+
+/* Manager sidebar layout */
+.manager-layout {
+    display: flex;
+    min-height: calc(100vh - 49px);
+}
+
+.manager-sidebar {
+    width: 196px;
+    flex-shrink: 0;
+    background-color: var(--bg);
+    border-right: 1px solid var(--border);
+    padding: 0.5rem 0;
+}
+
+.manager-sidebar-inner {
+    position: sticky;
+    top: 49px;
+}
+
+.manager-content {
+    flex: 1;
+    padding: 1.5rem;
+    min-width: 0;
+    animation: manager-fade-in 0.26s ease-out both;
+}
+
+@keyframes manager-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .manager-content {
+        animation: none;
+    }
+}
+
+.manager-sidebar .nav-link {
+    color: var(--text-muted);
+    padding: 0.38rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 0;
+    transition:
+        color 0.1s,
+        background-color 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    letter-spacing: 0.01em;
+    border-right: 2px solid transparent;
+}
+
+.manager-sidebar .nav-link:hover {
+    color: var(--text);
+    background-color: var(--surface);
+}
+
+.manager-sidebar .nav-link.active {
+    color: var(--accent);
+    background-color: rgba(var(--accent-rgb), 0.07);
+    border-right-color: var(--accent);
+}
+
+.manager-sidebar .nav-section-label {
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    color: var(--text-muted);
+    padding: 1.1rem 1rem 0.3rem;
+}
+
+/* ---- USER BADGES ---- */
+.user-badge {
+    display: inline-block;
+    border-radius: 9999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    white-space: nowrap;
+}
+
+.badge-active {
+    background: rgba(var(--success-rgb), 0.1);
+    color: var(--success);
+    border: 1px solid rgba(var(--success-rgb), 0.2);
+}
+
+.badge-inactive {
+    background: rgba(var(--warning-rgb), 0.1);
+    color: var(--warning);
+    border: 1px solid rgba(var(--warning-rgb), 0.2);
+}
+
+.badge-removed {
+    background: rgba(var(--error-rgb), 0.1);
+    color: var(--error);
+    border: 1px solid rgba(var(--error-rgb), 0.2);
+}
+
+/* "Enviado" — eixo de logistica, distinto dos status de pagamento (verde/ambar/
+   vermelho) e do accent (roxo). Nao ha token azul no tema, entao a cor e local. */
+.badge-shipped {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+/* ---- ACTION BUTTONS ---- */
+.btn-action-toggle {
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
+    color: var(--accent);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: background-color 0.1s;
+}
+
+.btn-action-toggle:hover {
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent);
+}
+
+.btn-action-edit {
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
+    color: var(--accent);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: background-color 0.1s;
+}
+
+.btn-action-edit:hover {
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent);
+}
+
+.btn-action-reset {
+    background: rgba(var(--warning-rgb), 0.08);
+    border: 1px solid rgba(var(--warning-rgb), 0.2);
+    color: var(--warning);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1;
+    transition: background-color 0.1s;
+}
+
+.btn-action-reset:hover {
+    background: rgba(var(--warning-rgb), 0.15);
+    color: var(--warning);
+}
+
+.btn-action-remove {
+    background: rgba(var(--error-rgb), 0.08);
+    border: 1px solid rgba(var(--error-rgb), 0.2);
+    color: var(--error);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: background-color 0.1s;
+}
+
+.btn-action-remove:hover {
+    background: rgba(var(--error-rgb), 0.15);
+    color: var(--error);
+}
+
+.btn-action-restore {
+    background: rgba(var(--success-rgb), 0.08);
+    border: 1px solid rgba(var(--success-rgb), 0.2);
+    color: var(--success);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: background-color 0.1s;
+}
+
+.btn-action-restore:hover {
+    background: rgba(var(--success-rgb), 0.15);
+    color: var(--success);
+}
+
+/* ---- ORDERS FILTER BAR ---- */
+.orders-filters {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.orders-filters-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.orders-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.orders-filter-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.orders-filter-status {
+    width: 12rem;
+}
+
+.orders-filter-status .orders-status-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+}
+
+.orders-status-toggle.is-active {
+    border-color: var(--border-accent);
+}
+
+.orders-status-count {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    background: var(--accent);
+}
+
+.orders-status-menu {
+    min-width: 13rem;
+    padding: 0.35rem;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.orders-status-option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    margin: 0;
+}
+
+.orders-status-option:hover {
+    background-color: var(--surface-2);
+}
+
+.orders-status-option .form-check-input {
+    margin: 0;
+    cursor: pointer;
+}
+
+.orders-filter-cpf,
+.orders-filter [name="cpf"] {
+    width: 10rem;
+}
+
+.orders-filter [name="telefone"] {
+    width: 9rem;
+}
+
+.orders-filter-gateway {
+    width: 11rem;
+}
+
+.orders-filter-dates .orders-date-range {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.orders-date-range .form-control {
+    width: 9rem;
+}
+
+/* O ícone NATIVO do date-picker segue o color-scheme (não o data-theme), então
+   vinha branco e invisível. Substituímos por um SVG de calendário próprio,
+   colorido por tema — determinístico em claro e escuro. */
+.orders-date-range input[type="date"]::-webkit-calendar-picker-indicator {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238f93a8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 0.95rem;
+    opacity: 0.75;
+    cursor: pointer;
+}
+
+.orders-date-range input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+[data-theme="light"] .orders-date-range input[type="date"]::-webkit-calendar-picker-indicator {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%237a7890' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+}
+
+/* Mesmo problema do ::-webkit-calendar-picker-indicator acima, agora nos
+   campos datetime-local da Janela de Vendas (/config). */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238f93a8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 0.95rem;
+    opacity: 0.75;
+    cursor: pointer;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+[data-theme="light"] input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%237a7890' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+}
+
+.orders-date-sep {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.orders-filter-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+/* ---- GATEWAY TAG ---- */
+.gateway-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--border-accent);
+    border-radius: 0.25rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.gateway-tag::before {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: var(--accent);
+    flex: none;
+}
+
+/* ---- PRODUTOS: busca + estado de estoque ---- */
+.products-filter-search {
+    width: 16rem;
+    max-width: 100%;
+}
+
+.products-filter-category {
+    width: 12rem;
+    max-width: 100%;
+}
+
+/* Estado de estoque (/produtos): a linha INTEIRA sinaliza a urgencia. Barra
+   colorida na 1a celula (border-collapse impede border-left na <tr>) + tinte
+   suave nas celulas. O tinte usa alpha baixo para nao brigar com o hover. */
+.product-row--low > td {
+    background-color: rgba(var(--warning-rgb), 0.07);
+}
+
+.product-row--low > td:first-child {
+    box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.product-row--out > td {
+    background-color: rgba(var(--error-rgb), 0.08);
+    color: var(--text-muted);
+}
+
+.product-row--out > td:first-child {
+    box-shadow: inset 3px 0 0 var(--error);
+}
+
+.stock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.stock-pill i {
+    font-size: 0.68rem;
+}
+
+.stock-pill--low {
+    background: rgba(var(--warning-rgb), 0.12);
+    color: var(--warning);
+    border: 1px solid rgba(var(--warning-rgb), 0.25);
+}
+
+.stock-pill--out {
+    background: rgba(var(--error-rgb), 0.12);
+    color: var(--error);
+    border: 1px solid rgba(var(--error-rgb), 0.25);
+}
+
+@media (max-width: 768px) {
+    .orders-filters-grid {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .orders-filter,
+    .orders-filter-status,
+    .orders-filter [name="cpf"],
+    .orders-filter [name="telefone"],
+    .products-filter-search,
+    .products-filter-category,
+    .orders-date-range .form-control {
+        width: 100%;
+    }
+
+    .orders-filter-actions {
+        margin-left: 0;
+    }
+
+    .manager-layout {
+        flex-direction: column;
+    }
+
+    /* Sidebar vira uma barra de abas horizontal, rolavel, colada abaixo do
+       header. Uma unica linha (sem wrap) — some o bloco solto de 2 linhas. */
+    .manager-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 0.35rem 0.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .manager-sidebar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .manager-sidebar-inner {
+        position: static;
+    }
+
+    /* !important vence a utility .flex-column do Bootstrap no markup do <ul>. */
+    .manager-sidebar .nav {
+        flex-direction: row !important;
+        flex-wrap: nowrap;
+        gap: 0.35rem !important;
+        width: max-content;
+    }
+
+    .manager-sidebar .nav-link {
+        border-right: none;
+        border-radius: 9999px;
+        padding: 0.4rem 0.85rem;
+        white-space: nowrap;
+    }
+
+    .manager-sidebar .nav-link.active {
+        background-color: rgba(var(--accent-rgb), 0.1);
+    }
+
+    .manager-sidebar .nav-section-label {
+        display: none;
+    }
+
+    .manager-content {
+        padding: 1rem;
+    }
+}
+
+/* Mobile estreito: KPIs nao podem estourar a coluna. Reduz o valor, permite
+   quebra e impede o texto de empurrar o card. */
+@media (max-width: 575.98px) {
+    .stat-card {
+        padding: 0.85rem;
+    }
+
+    .stat-card .d-flex {
+        min-width: 0;
+    }
+
+    .stat-card .stat-value {
+        font-size: 1.25rem;
+        word-break: break-word;
+    }
+
+    /* Cabecalho de pagina com acao (ex.: "Novo Produto"): empilha titulo e
+       botao em vez de disputar a largura. */
+    .page-header .d-flex.justify-content-between {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    /* Intervalo de datas dos filtros: os dois campos quebram em vez de
+       espremer lado a lado numa tela estreita. */
+    .orders-date-range {
+        flex-wrap: wrap;
+    }
+
+    .orders-date-range .form-control {
+        flex: 1 1 8rem;
+    }
+}
+
+/* ================================================
+   DETALHE DO PEDIDO — /pedidos/{idx}
+   Escopado por .order-detail-page para nao vazar
+   espacamento/estilo para outras telas do manager.
+   ================================================ */
+.order-detail-page .content-panel + .content-panel {
+    margin-top: 1rem;
+}
+
+/* Comprador + Endereço lado a lado (colapsa no mobile) */
+.detail-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: stretch;
+    margin-bottom: 1rem;
+}
+
+/* Subseção dentro de um card (ex.: Pagamento sob Dados do Comprador) */
+.detail-subhead {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    margin: 1rem 0 0.75rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Dentro do grid o espacamento e o gap, nunca o margin-top de painel irmao
+   (que desalinharia as colunas). */
+.order-detail-page .detail-columns .content-panel + .content-panel {
+    margin-top: 0;
+}
+
+@media (max-width: 768px) {
+    .detail-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Header de painel com acao a direita (ex.: botao Gerar etiqueta) */
+.content-panel-header--action {
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+}
+
+.content-panel-header--action .btn {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* Header: titulo+meta a esquerda, botao Voltar alinhado a direita */
+.order-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* Header: badge de status ao lado do titulo + meta (token/data) */
+.order-detail-header h1 {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.order-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+}
+
+.order-meta-token {
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.order-meta-sep {
+    color: var(--border-accent);
+}
+
+/* Strip de resumo */
+.order-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+.order-summary-tile {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.order-summary-tile::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--accent);
+}
+
+.order-summary-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+}
+
+.order-summary-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-heading);
+    letter-spacing: -0.01em;
+}
+
+.order-summary-value small {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* Grid de pares rotulo/valor */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem 1.5rem;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.detail-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+}
+
+.detail-value {
+    font-size: 0.86rem;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.detail-value--mono {
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.detail-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Itens: variante + linhas de total */
+.variant-tag {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background-color: var(--surface-2);
+}
+
+.order-items-empty {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 1.25rem;
+}
+
+.order-total-row td {
+    border-top: 1px solid var(--border);
+}
+
+.order-total-row--muted td {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+}
+
+.order-total-row--grand td {
+    font-size: 0.9rem;
+    color: var(--text);
+    border-top: 1px solid var(--border-accent);
+}
+
+@media (max-width: 768px) {
+    .order-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Clientes (/clientes) ─────────────────────────────────────────────
+   Rótulo das ações da listagem — espelha .orders-action-label. */
+.customers-action-label {
+    margin-left: 0.3rem;
+    font-size: 0.78rem;
+}
+
+/* Ações da listagem: cada botão com largura fixa por papel, para a coluna
+   alinhar mesmo quando o 3º alterna entre "Bloquear" e "Desbloquear" (textos
+   de larguras diferentes). Só no desktop — em ≤768px o rótulo some e o botão
+   vira só ícone (regra abaixo). */
+.customers-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.customers-actions form {
+    display: flex;
+}
+.customers-actions form .btn {
+    width: 100%;
+}
+@media (min-width: 769px) {
+    .customers-actions .btn-action-edit {
+        min-width: 104px;
+    }
+    .customers-actions .btn-action-toggle {
+        min-width: 130px;
+    }
+    .customers-actions .btn-action-remove,
+    .customers-actions .btn-action-restore {
+        min-width: 126px;
+    }
+}
+
+/* Histórico de compras: linha do tempo vertical (assinatura da tela de
+   detalhe do cliente). Trilho à esquerda com um ponto por pedido. */
+.customer-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+
+.customer-timeline-item {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 0 0 1.1rem 1.35rem;
+}
+
+/* Trilho contínuo: desenhado pela borda esquerda de cada item, recuado até
+   o centro do ponto. O último item interrompe o trilho. */
+.customer-timeline-item::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 0.35rem;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--border);
+}
+
+.customer-timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.customer-timeline-item:last-child::before {
+    display: none;
+}
+
+.customer-timeline-dot {
+    position: absolute;
+    left: 0;
+    top: 0.3rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+
+.customer-timeline-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.customer-timeline-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.customer-timeline-order {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.customer-timeline-order:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.customer-timeline-meta {
+    margin-top: 0.2rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.customer-timeline-total {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.customer-timeline-sep {
+    opacity: 0.5;
+}
+
+.customer-timeline-cta {
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .customers-action-label {
+        display: none;
+    }
+}

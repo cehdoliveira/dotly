@@ -1,0 +1,66 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gerar kernel.php a partir dos examples (scanFiles do PHPStan precisa do arquivo)
+        run: |
+          cp site/app/inc/kernel.php.example site/app/inc/kernel.php
+          cp manager/app/inc/kernel.php.example manager/app/inc/kernel.php
+      - name: Sync guard (lib/model identicos entre envs)
+        run: bash bin/check-shared-sync.sh
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, mbstring, gd
+      - name: Composer install (site)
+        run: composer install -d site/app/inc/lib --no-interaction
+      - name: Composer install (manager)
+        run: composer install -d manager/app/inc/lib --no-interaction
+      - name: PHPStan site
+        run: cd site && HTTP_HOST=localhost php app/inc/lib/vendor/bin/phpstan analyse --no-progress
+      - name: PHPStan manager
+        run: cd manager && HTTP_HOST=localhost php app/inc/lib/vendor/bin/phpstan analyse --no-progress
+
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: db_infinnityimportacao
+          MYSQL_ROOT_PASSWORD: ci_root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, mbstring, gd
+      - name: Composer install (ambos)
+        run: |
+          composer install -d site/app/inc/lib --no-interaction
+          composer install -d manager/app/inc/lib --no-interaction
+      - name: Gerar kernel.php a partir dos examples (DB do serviço)
+        run: |
+          for env in site manager; do
+            cp $env/app/inc/kernel.php.example $env/app/inc/kernel.php
+            sed -i 's/define("DB_HOST", "mysql")/define("DB_HOST", "127.0.0.1")/' $env/app/inc/kernel.php
+            sed -i 's/define("DB_USER", "user_infinnityimportacao")/define("DB_USER", "root")/' $env/app/inc/kernel.php
+            sed -i 's/define("DB_PASS", "SUA_SENHA_AQUI")/define("DB_PASS", "ci_root")/' $env/app/inc/kernel.php
+          done
+      - name: Rodar migrations (runner real)
+        run: HTTP_HOST=infinnityimportacao.local php site/cgi-bin/run_migrations.php
+      - name: PHPUnit site
+        run: HTTP_HOST=localhost php site/app/inc/lib/vendor/bin/phpunit -c site/phpunit.xml
+      - name: PHPUnit manager
+        run: HTTP_HOST=localhost php manager/app/inc/lib/vendor/bin/phpunit -c manager/phpunit.xml

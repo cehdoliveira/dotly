@@ -1,0 +1,44 @@
+parameters:
+    level: 4
+    phpVersion: 80400
+    paths:
+        - app/inc/controller
+        - app/inc/lib
+        - app/inc/model
+    excludePaths:
+        - app/inc/lib/vendor/*
+    scanFiles:
+        - app/inc/kernel.php
+        - app/inc/urls.php
+        - app/inc/lists.php
+    bootstrapFiles:
+        - app/inc/lib/vendor/autoload.php
+    # Credenciais dos gateways: definidas (vazias) no kernel.php e preenchidas por
+    # ambiente. Sem isto, o PHPStan resolveria o literal '' do scanFiles e marcaria
+    # as guardas fail-closed dos gateways (=== '') como sempre-verdadeiras. Declarar
+    # como dinamicas preserva as guardas VIVAS sem suprimir erro nem rebaixar nivel.
+    dynamicConstantNames:
+        - MP_ACCESS_TOKEN
+        - MP_WEBHOOK_SECRET
+        - PAGBANK_API_BASE
+        - PAGBANK_TOKEN
+        - INFINITEPAY_HANDLE
+    ignoreErrors:
+        # canonical_url() compara a constante ALLOWED_HOSTS (definida em runtime no
+        # kernel.php) contra ''. O PHPStan resolve a constante para um literal vindo
+        # da scanFiles e marca a comparacao da guarda como sempre-constante. A guarda
+        # e VIVA em producao (protecao contra Host-header injection) — ignoramos
+        # apenas estas mensagens neste arquivo, sem remover a guarda nem rebaixar o nivel.
+        -
+            identifier: notIdentical.alwaysFalse
+            path: app/inc/lib/CommonFunctions.php
+        -
+            identifier: notIdentical.alwaysTrue
+            path: app/inc/lib/CommonFunctions.php
+        -
+            identifier: booleanAnd.alwaysFalse
+            path: app/inc/lib/CommonFunctions.php
+        -
+            identifier: booleanAnd.alwaysTrue
+            path: app/inc/lib/CommonFunctions.php
+    reportUnmatchedIgnoredErrors: false
