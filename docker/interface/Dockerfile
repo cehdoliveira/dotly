@@ -33,8 +33,8 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 
 # Nginx config — remove default, add ours
 RUN rm /etc/nginx/sites-enabled/default
-COPY default.conf /etc/nginx/sites-available/dotly.conf
-RUN ln -s /etc/nginx/sites-available/dotly.conf /etc/nginx/sites-enabled/dotly.conf
+COPY default.conf /etc/nginx/sites-available/app.conf
+RUN ln -s /etc/nginx/sites-available/app.conf /etc/nginx/sites-enabled/app.conf
 
 # PHP config
 COPY php.ini /usr/local/etc/php/php.ini
