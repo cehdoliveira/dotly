@@ -126,7 +126,7 @@ function sendEmailViaPHPMailer(array $emailData): bool
         // Remetente
         $mail->setFrom(
             defined('mail_from_mail') ? mail_from_mail : 'noreply@localhost',
-            defined('mail_from_name') ? mail_from_name : 'Dotly'
+            defined('mail_from_name') ? mail_from_name : 'App'
         );
 
         // Destinatários
