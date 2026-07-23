@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS `products` (
+    `idx` INT NOT NULL AUTO_INCREMENT,
+    `created_at` DATETIME DEFAULT NULL,
+    `created_by` INT DEFAULT NULL,
+    `modified_at` DATETIME DEFAULT NULL,
+    `modified_by` INT DEFAULT NULL,
+    `removed_at` DATETIME DEFAULT NULL,
+    `removed_by` INT DEFAULT NULL,
+    `active` ENUM('yes', 'no') DEFAULT 'yes',
+    `name` VARCHAR(255) NOT NULL,
+    `slug` VARCHAR(255) NOT NULL UNIQUE,
+    `category` VARCHAR(60) NOT NULL DEFAULT '',
+    `is_infinity` ENUM('yes','no') NOT NULL DEFAULT 'no',
+    `description` TEXT DEFAULT NULL,
+    `dosage` VARCHAR(40) DEFAULT NULL,
+    `purity_label` VARCHAR(20) DEFAULT NULL,
+    `price_unit_cents` INT UNSIGNED NOT NULL DEFAULT 0,
+    `box_qty` SMALLINT UNSIGNED NOT NULL DEFAULT 10,
+    `stock` INT NOT NULL DEFAULT 0,
+    `sort_order` INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (`idx`),
+    KEY `idx_products_active_sort` (`active`, `sort_order`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
