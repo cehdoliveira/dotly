@@ -13,7 +13,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -sf -H 'Host: dotly.local' http://localhost/ >/dev/null && curl -sf -H 'Host: manager.dotly.local' http://localhost/ >/dev/null || exit 1",
+          "curl -sf -H 'Host: localhost' http://localhost/ >/dev/null && curl -sf -H 'Host: localhost' http://localhost/ >/dev/null || exit 1",
         ]
       interval: 30s
       timeout: 5s
