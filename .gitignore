@@ -39,8 +39,8 @@ CLAUDE.md
 # ============================================================
 *.md
 !/README.md
-# Design docs de features referenciados por código/scripts (não apagar)
-!plans/*.md
+# Pasta de planos/docs internos — não versionar (nada dentro sobe, nem README.md)
+plans/
 
 
 # ============================================================
