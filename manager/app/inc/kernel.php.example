@@ -90,7 +90,7 @@ define("APP_VERSION", "1.8.1.0");
 define("LOG_LEVEL", "info"); // debug, info, warning, error
 
 // ===== UPLOAD =====
-define("UPLOAD_DIR", "/var/www/dotly/manager/public_html/assets/upload/");
+define("UPLOAD_DIR", "/var/www/app/manager/public_html/assets/upload/");
 define("UPLOAD_MAX_SIZE", 10);
 define("UPLOAD_ALLOWED_TYPES", "jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx");
 

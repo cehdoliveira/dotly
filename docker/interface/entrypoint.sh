@@ -6,30 +6,30 @@ ENABLE_CRON="${ENABLE_CRON:-false}"
 echo "Executando composer install nas pastas lib..."
 
 # Instalar dependências do composer para site
-if [ -f "/var/www/dotly/site/app/inc/lib/composer.json" ]; then
+if [ -f "/var/www/app/site/app/inc/lib/composer.json" ]; then
     echo "Instalando dependências do site..."
-    cd /var/www/dotly/site/app/inc/lib
+    cd /var/www/app/site/app/inc/lib
     composer install --no-interaction --prefer-dist --optimize-autoloader
 fi
 
-if [ -f "/var/www/dotly/manager/app/inc/lib/composer.json" ]; then
+if [ -f "/var/www/app/manager/app/inc/lib/composer.json" ]; then
     echo "Instalando dependências do manager..."
-    cd /var/www/dotly/manager/app/inc/lib
+    cd /var/www/app/manager/app/inc/lib
     composer install --no-interaction --prefer-dist --optimize-autoloader
 fi
 
 echo "Composer install concluído!"
 
 # Garantir permissão de escrita nos diretórios de upload
-chown -R www-data:www-data /var/www/dotly/manager/public_html/assets/upload/ /var/www/dotly/site/public_html/assets/upload/ 2>/dev/null || true
-chmod 775 /var/www/dotly/manager/public_html/assets/upload/ /var/www/dotly/site/public_html/assets/upload/ 2>/dev/null || true
+chown -R www-data:www-data /var/www/app/manager/public_html/assets/upload/ /var/www/app/site/public_html/assets/upload/ 2>/dev/null || true
+chmod 775 /var/www/app/manager/public_html/assets/upload/ /var/www/app/site/public_html/assets/upload/ 2>/dev/null || true
 
 # Host HTTP de cada ambiente derivado do proprio kernel.php (1o item de
 # ALLOWED_HOSTS). Necessario porque os scripts CLI (workers e dispatch_emails)
 # precisam de um HTTP_HOST que passe na validacao anti-Host-Injection do kernel
 # E gere links de e-mail (cFrontend) com o dominio real. Brand-agnostic.
-SITE_HTTP_HOST=$(php -r '$_SERVER["HTTP_HOST"]=""; require "/var/www/dotly/site/app/inc/kernel.php"; $h=explode(",", constant("ALLOWED_HOSTS")); echo trim($h[0]);' 2>/dev/null || true)
-MANAGER_HTTP_HOST=$(php -r '$_SERVER["HTTP_HOST"]=""; require "/var/www/dotly/manager/app/inc/kernel.php"; $h=explode(",", constant("ALLOWED_HOSTS")); echo trim($h[0]);' 2>/dev/null || true)
+SITE_HTTP_HOST=$(php -r '$_SERVER["HTTP_HOST"]=""; require "/var/www/app/site/app/inc/kernel.php"; $h=explode(",", constant("ALLOWED_HOSTS")); echo trim($h[0]);' 2>/dev/null || true)
+MANAGER_HTTP_HOST=$(php -r '$_SERVER["HTTP_HOST"]=""; require "/var/www/app/manager/app/inc/kernel.php"; $h=explode(",", constant("ALLOWED_HOSTS")); echo trim($h[0]);' 2>/dev/null || true)
 echo "[entrypoint] SITE_HTTP_HOST=${SITE_HTTP_HOST:-<vazio>} MANAGER_HTTP_HOST=${MANAGER_HTTP_HOST:-<vazio>}"
 
 # Instalar crontab e iniciar cron apenas no container app
@@ -88,8 +88,8 @@ supervise_worker() {
 #     config_controller produz DIRETO no Kafka (credenciais de novo usuario,
 #     redefinicao de senha) — nao passam pela email_queue.
 # Remover o worker do manager quebraria (em silencio) credencial/reset de admin.
-supervise_worker /var/www/dotly/manager/cgi-bin/kafka_email_worker.php /var/log/kafka_email_worker_manager.log "$MANAGER_HTTP_HOST" &
-supervise_worker /var/www/dotly/site/cgi-bin/kafka_email_worker.php /var/log/kafka_email_worker_site.log "$SITE_HTTP_HOST" &
+supervise_worker /var/www/app/manager/cgi-bin/kafka_email_worker.php /var/log/kafka_email_worker_manager.log "$MANAGER_HTTP_HOST" &
+supervise_worker /var/www/app/site/cgi-bin/kafka_email_worker.php /var/log/kafka_email_worker_site.log "$SITE_HTTP_HOST" &
 echo "Kafka Email Workers supervisionados iniciados"
 
 # Iniciar Nginx (criar diretório de logs se não existir)

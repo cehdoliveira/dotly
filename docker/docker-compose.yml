@@ -20,21 +20,21 @@ services:
       retries: 3
     volumes:
       - ../_data/logs/:/var/log/
-      - ../_data/upload/:/var/www/dotly/site/public_html/assets/upload/
-      - ../_data/upload/:/var/www/dotly/manager/public_html/assets/upload/
-      - ../site/public_html/:/var/www/dotly/site/public_html/
-      - ../site/app/:/var/www/dotly/site/app/
-      - ../site/cgi-bin/:/var/www/dotly/site/cgi-bin/
-      - ../site/tests/:/var/www/dotly/site/tests/
-      - ../site/phpunit.xml:/var/www/dotly/site/phpunit.xml
-      - ../site/phpstan.neon:/var/www/dotly/site/phpstan.neon
-      - ../manager/public_html/:/var/www/dotly/manager/public_html/
-      - ../manager/app/:/var/www/dotly/manager/app/
-      - ../manager/cgi-bin/:/var/www/dotly/manager/cgi-bin/
-      - ../manager/tests/:/var/www/dotly/manager/tests/
-      - ../manager/phpunit.xml:/var/www/dotly/manager/phpunit.xml
-      - ../manager/phpstan.neon:/var/www/dotly/manager/phpstan.neon
-      - ../migrations/:/var/www/dotly/migrations/
+      - ../_data/upload/:/var/www/app/site/public_html/assets/upload/
+      - ../_data/upload/:/var/www/app/manager/public_html/assets/upload/
+      - ../site/public_html/:/var/www/app/site/public_html/
+      - ../site/app/:/var/www/app/site/app/
+      - ../site/cgi-bin/:/var/www/app/site/cgi-bin/
+      - ../site/tests/:/var/www/app/site/tests/
+      - ../site/phpunit.xml:/var/www/app/site/phpunit.xml
+      - ../site/phpstan.neon:/var/www/app/site/phpstan.neon
+      - ../manager/public_html/:/var/www/app/manager/public_html/
+      - ../manager/app/:/var/www/app/manager/app/
+      - ../manager/cgi-bin/:/var/www/app/manager/cgi-bin/
+      - ../manager/tests/:/var/www/app/manager/tests/
+      - ../manager/phpunit.xml:/var/www/app/manager/phpunit.xml
+      - ../manager/phpstan.neon:/var/www/app/manager/phpstan.neon
+      - ../migrations/:/var/www/app/migrations/
     ports:
       - "80:80"
     networks:

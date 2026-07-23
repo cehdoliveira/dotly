@@ -28,13 +28,13 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # flock -n: se o tick anterior ainda estiver rodando (DB/migration lento), o SO
 # pula este ciclo em vez de iniciar um segundo processo. Guarda independente do
 # lock de banco (GET_LOCK no MigrationRunner) — defesa em profundidade.
-*/5 * * * * flock -n /tmp/dotly_migrate.lock php /var/www/dotly/site/cgi-bin/run_migrations.php >> /var/log/migrations.log 2>&1
+*/5 * * * * flock -n /tmp/dotly_migrate.lock php /var/www/app/site/cgi-bin/run_migrations.php >> /var/log/migrations.log 2>&1
 
 # Disparar e-mails transacionais pendentes (lote pequeno; retry fica na tabela)
-*/5 * * * * flock -n /tmp/dotly_dispatch_emails.lock php /var/www/dotly/site/cgi-bin/dispatch_emails.php >> /var/log/dispatch_emails.log 2>&1
+*/5 * * * * flock -n /tmp/dotly_dispatch_emails.lock php /var/www/app/site/cgi-bin/dispatch_emails.php >> /var/log/dispatch_emails.log 2>&1
 
 # Expirar pedidos vencidos e devolver o estoque reservado (lote pequeno)
-*/5 * * * * flock -n /tmp/dotly_expire_orders.lock php /var/www/dotly/site/cgi-bin/expire_orders.php >> /var/log/expire_orders.log 2>&1
+*/5 * * * * flock -n /tmp/dotly_expire_orders.lock php /var/www/app/site/cgi-bin/expire_orders.php >> /var/log/expire_orders.log 2>&1
 
 # Reconciliar cobrancas pendentes contra o PSP (fallback de webhook perdido; MP/PagBank)
-*/5 * * * * flock -n /tmp/dotly_reconcile_charges.lock php /var/www/dotly/site/cgi-bin/reconcile_charges.php >> /var/log/reconcile_charges.log 2>&1
+*/5 * * * * flock -n /tmp/dotly_reconcile_charges.lock php /var/www/app/site/cgi-bin/reconcile_charges.php >> /var/log/reconcile_charges.log 2>&1

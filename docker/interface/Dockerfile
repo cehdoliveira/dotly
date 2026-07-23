@@ -43,11 +43,11 @@ COPY php.ini /usr/local/etc/php/php.ini
 COPY zz-dotly.conf /usr/local/etc/php-fpm.d/zz-dotly.conf
 
 # Diretórios lib
-RUN mkdir -p /var/www/dotly/site/app/inc/lib \
-    && mkdir -p /var/www/dotly/manager/app/inc/lib
+RUN mkdir -p /var/www/app/site/app/inc/lib \
+    && mkdir -p /var/www/app/manager/app/inc/lib
 
 # Permissões
-RUN chown -R www-data:www-data /var/www/dotly
+RUN chown -R www-data:www-data /var/www/app
 RUN mkdir -p /var/log/nginx && chown -R www-data:www-data /var/log/nginx
 
 # Crontab + entrypoint
