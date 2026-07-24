@@ -485,7 +485,7 @@ class config_controller
 
                     if ($mailSent) {
                         $_SESSION["messages_app"]["success"] = ["Usuário criado com sucesso. Um email foi enviado com as instruções para definir a senha."];
-                    } else {
+                    } elseif ($setPasswordLink !== '') {
                         // O e-mail NAO saiu (rdkafka ausente, broker fora, erro de
                         // template). O usuario existe com enabled='no' e senha
                         // aleatoria: sem o link abaixo ele fica inacessivel e o token
@@ -499,6 +499,17 @@ class config_controller
                         ]);
                         $_SESSION["messages_app"]["warning"] = [
                             "Usuário criado, mas o e-mail NÃO pôde ser enviado. Entregue este link ao novo usuário (validade 72h): " . $setPasswordLink,
+                        ];
+                    } else {
+                        // canonical_url() lancou antes de montar o link (kernel.php sem
+                        // MANAGER_CANONICAL_URL nem ALLOWED_HOSTS configurados, fail-closed
+                        // — ver CommonFunctions.php). Sem link nenhum pra mostrar, o aviso
+                        // tem que dizer isso em vez de prometer um link vazio.
+                        Logger::getInstance()->error('config_controller: link de definicao de senha nao pode ser gerado (canonical_url falhou)', [
+                            'mail' => $post["mail"],
+                        ]);
+                        $_SESSION["messages_app"]["warning"] = [
+                            "Usuário criado, mas não foi possível gerar o link de definição de senha nem enviar o e-mail (configuração de URL canônica ausente). Verifique MANAGER_CANONICAL_URL/ALLOWED_HOSTS no kernel.php.",
                         ];
                     }
                     basic_redir($config_url);
