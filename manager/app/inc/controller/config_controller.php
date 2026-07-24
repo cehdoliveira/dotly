@@ -462,6 +462,8 @@ class config_controller
                 if ($newIdx > 0) {
                     $newUser->save_attach(["idx" => $newIdx, "post" => $post], ["profiles"]);
 
+                    $mailSent = false;
+                    $setPasswordLink = '';
                     try {
                         $name             = $post["name"];
                         $login            = $post["login"];
@@ -475,13 +477,41 @@ class config_controller
 
                         if (class_exists("EmailProducer")) {
                             $producer = EmailProducer::getInstance();
-                            $producer->send($post["mail"], $subject, $body);
+                            $mailSent = $producer->send($post["mail"], $subject, $body);
                         }
                     } catch (Exception $e) {
                         error_log("Erro ao enviar email de cadastro: " . $e->getMessage());
                     }
 
-                    $_SESSION["messages_app"]["success"] = ["Usuário criado com sucesso. Um email foi enviado com as instruções para definir a senha."];
+                    if ($mailSent) {
+                        $_SESSION["messages_app"]["success"] = ["Usuário criado com sucesso. Um email foi enviado com as instruções para definir a senha."];
+                    } elseif ($setPasswordLink !== '') {
+                        // O e-mail NAO saiu (rdkafka ausente, broker fora, erro de
+                        // template). O usuario existe com enabled='no' e senha
+                        // aleatoria: sem o link abaixo ele fica inacessivel e o token
+                        // expira em 72h. Mostrar o link e o unico caminho de
+                        // recuperacao sem acesso ao banco. Quem ve a mensagem e o
+                        // admin que acabou de criar a conta — nao ha escalada de
+                        // privilegio em exibir a ele o link que ele mesmo gerou.
+                        Logger::getInstance()->error('config_controller: e-mail de credenciais de admin nao foi enviado', [
+                            'mail'      => $post["mail"],
+                            'kafka'     => EmailProducer::isAvailable(),
+                        ]);
+                        $_SESSION["messages_app"]["warning"] = [
+                            "Usuário criado, mas o e-mail NÃO pôde ser enviado. Entregue este link ao novo usuário (validade 72h): " . $setPasswordLink,
+                        ];
+                    } else {
+                        // canonical_url() lancou antes de montar o link (kernel.php sem
+                        // MANAGER_CANONICAL_URL nem ALLOWED_HOSTS configurados, fail-closed
+                        // — ver CommonFunctions.php). Sem link nenhum pra mostrar, o aviso
+                        // tem que dizer isso em vez de prometer um link vazio.
+                        Logger::getInstance()->error('config_controller: link de definicao de senha nao pode ser gerado (canonical_url falhou)', [
+                            'mail' => $post["mail"],
+                        ]);
+                        $_SESSION["messages_app"]["warning"] = [
+                            "Usuário criado, mas não foi possível gerar o link de definição de senha nem enviar o e-mail (configuração de URL canônica ausente). Verifique MANAGER_CANONICAL_URL/ALLOWED_HOSTS no kernel.php.",
+                        ];
+                    }
                     basic_redir($config_url);
                 } else {
                     $_SESSION["messages_app"]["danger"] = ["Falha ao criar usuário. Tente novamente mais tarde."];
@@ -557,16 +587,27 @@ class config_controller
                     include(constant("cRootServer") . "ui/mail/reset_password.php");
                     $body = ob_get_clean();
 
+                    $mailSent = false;
                     try {
                         if (class_exists("EmailProducer")) {
                             $producer = EmailProducer::getInstance();
-                            $producer->send($user['mail'], $subject, $body);
+                            $mailSent = $producer->send($user['mail'], $subject, $body);
                         }
                     } catch (Exception $e) {
                         error_log("Erro ao enviar reset de senha: " . $e->getMessage());
                     }
 
-                    $_SESSION["messages_app"]["success"] = ["Link de redefinição de senha enviado para " . htmlspecialchars($user['mail'], ENT_QUOTES, 'UTF-8') . "."];
+                    if ($mailSent) {
+                        $_SESSION["messages_app"]["success"] = ["Link de redefinição de senha enviado para " . $user['mail'] . "."];
+                    } else {
+                        Logger::getInstance()->error('config_controller: e-mail de reset de senha nao foi enviado', [
+                            'mail'      => $user['mail'],
+                            'kafka'     => EmailProducer::isAvailable(),
+                        ]);
+                        $_SESSION["messages_app"]["warning"] = [
+                            "Link de redefinição gerado, mas o e-mail NÃO pôde ser enviado. Entregue este link ao usuário (validade 2h): " . $resetLink,
+                        ];
+                    }
                 }
             }
         } catch (RuntimeException $e) {
