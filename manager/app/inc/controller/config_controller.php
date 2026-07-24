@@ -362,7 +362,9 @@ class config_controller
             ] as $key => $value) {
                 // Upsert em 2 passos: INSERT IGNORE cobre base sem o seed 044;
                 // UPDATE grava valor, reativa soft-delete (UNIQUE de skey abrange
-                // linhas removidas) e carimba modified_at em PHP (clock skew).
+                // linhas removidas) e carimba modified_at em PHP — fuso da conexao
+                // ja alinhado ao do PHP em localPDO (plans/005), mas o carimbo
+                // explicito continua por ser mais direto/estavel.
                 $model->execute_raw_prepared(
                     "INSERT IGNORE INTO settings (created_at, created_by, active, skey, svalue) VALUES (?, ?, 'yes', ?, '')",
                     [date('Y-m-d H:i:s'), $adminId, $key]

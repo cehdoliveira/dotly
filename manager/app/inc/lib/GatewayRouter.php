@@ -200,10 +200,11 @@ final class GatewayRouter
     }
 
     /**
-     * Conta pedidos pagos na ultima hora. Janela calculada em PHP (nunca no
-     * horario do servidor MySQL — skew de ~3h documentado entre o relogio do
-     * PHP e o do container MySQL). Fail-open: qualquer excecao na query
-     * retorna 0 e loga — deteccao indisponivel nao pode derrubar o checkout.
+     * Conta pedidos pagos na ultima hora. Janela calculada em PHP em vez de
+     * depender do horario do servidor MySQL — o fuso da conexao ja e alinhado ao
+     * do PHP em localPDO (plans/005), mas calcular a janela em PHP continua mais
+     * direto/estavel. Fail-open: qualquer excecao na query retorna 0 e loga —
+     * deteccao indisponivel nao pode derrubar o checkout.
      */
     private static function paidOrdersLastHour(): int
     {
