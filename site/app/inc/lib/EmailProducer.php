@@ -103,6 +103,17 @@ if (extension_loaded('rdkafka') && class_exists('RdKafka\Producer')) {
         }
 
         /**
+         * True quando existe um producer Kafka de verdade por tras desta classe.
+         * O branch sem rdkafka declara um STUB cujos metodos sempre devolvem false
+         * (NAO existe fallback sincrono). Chamadores que precisam saber se o e-mail
+         * tem chance de sair devem consultar isto ou o bool de retorno de send().
+         */
+        public static function isAvailable(): bool
+        {
+            return true;
+        }
+
+        /**
          * Envia email para fila Kafka
          *
          * @param string|array $to Destinatário(s)
@@ -278,6 +289,11 @@ if (extension_loaded('rdkafka') && class_exists('RdKafka\Producer')) {
                 self::$instance = new self();
             }
             return self::$instance;
+        }
+
+        public static function isAvailable(): bool
+        {
+            return false;
         }
 
         public static function send(string $to, string $subject, string $body): bool
