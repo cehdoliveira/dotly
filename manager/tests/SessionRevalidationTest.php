@@ -103,6 +103,7 @@ final class SessionRevalidationTest extends DBTestCase
         $this->setSessionCredential($id);
 
         $this->assertFalse(auth_controller::check_login());
+        $this->assertSame([], $_SESSION, 'destroy_session() deve zerar $_SESSION na revalidacao que falha');
     }
 
     public function testUsuarioRemovidoNaoPassa(): void
@@ -114,6 +115,7 @@ final class SessionRevalidationTest extends DBTestCase
         $this->setSessionCredential($id);
 
         $this->assertFalse(auth_controller::check_login());
+        $this->assertSame([], $_SESSION, 'destroy_session() deve zerar $_SESSION na revalidacao que falha');
     }
 
     public function testUsuarioSemPerfilAdmNaoPassa(): void
@@ -125,10 +127,31 @@ final class SessionRevalidationTest extends DBTestCase
         $this->setSessionCredential($id);
 
         $this->assertFalse(auth_controller::check_login());
+        $this->assertSame([], $_SESSION, 'destroy_session() deve zerar $_SESSION na revalidacao que falha');
     }
 
     public function testSessaoSemCredencialNaoPassa(): void
     {
         $this->assertFalse(auth_controller::check_login());
+    }
+
+    public function testChamadaRepetidaReaproveitaCachePorRequest(): void
+    {
+        $id = $this->createUser('yes', 'yes');
+        $model = new users_model();
+        $model->save_attach(["idx" => $id, "post" => ["profiles_id" => $this->adminProfileId()]], ["profiles"]);
+
+        $this->setSessionCredential($id);
+
+        $this->assertTrue(auth_controller::check_login());
+
+        // Inativa o usuario SEM chamar reset_revalidation_cache(): dentro da mesma
+        // "requisicao", self::$revalidated ja resolvido nao deve bater no banco de novo.
+        $update = new users_model();
+        $update->set_filter(["idx = ?"], [$id]);
+        $update->populate(["enabled" => "no"]);
+        $update->save();
+
+        $this->assertTrue(auth_controller::check_login(), 'segunda chamada na mesma requisicao deve reaproveitar o cache, nao reconsultar o banco');
     }
 }

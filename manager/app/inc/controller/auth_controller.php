@@ -8,6 +8,19 @@ class auth_controller
      */
     private static ?bool $revalidated = null;
 
+    /** True se algum perfil anexado (profiles_attach) tiver adm='yes'. Compartilhado
+     *  por check_login() e login() para as duas checagens nunca divergirem. */
+    private static function hasAdminProfile(array $profilesAttach): bool
+    {
+        foreach ($profilesAttach as $profile) {
+            if (($profile["adm"] ?? 'no') === 'yes') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * True apenas se a sessao tem credencial E o usuario continua sendo um admin
      * valido NO BANCO (active='yes', enabled='yes', perfil com adm='yes') — os
@@ -35,17 +48,11 @@ class auth_controller
             $users->set_filter([" active = 'yes' ", " enabled = 'yes' ", " idx = ? "], [$idx]);
             $users->set_paginate([1]);
             $users->load_data(false);
-            $users->attach(["profiles"]);
+            $users->attach(["profiles"], class_field: [" adm "]);
 
             $user = $users->data[0] ?? null;
-            $isAdmin = false;
-            foreach (($user["profiles_attach"] ?? []) as $profile) {
-                if (($profile["adm"] ?? 'no') === 'yes') {
-                    $isAdmin = true;
-                    break;
-                }
-            }
-        } catch (\Throwable $e) {
+            $isAdmin = self::hasAdminProfile($user["profiles_attach"] ?? []);
+        } catch (\PDOException $e) {
             // Fail-CLOSED de proposito, ao contrario do resto do repo (Redis/Kafka
             // fail-open): aqui a duvida e sobre AUTORIZACAO de admin. Um erro de
             // banco derruba a sessao e manda pro login, nao concede acesso.
@@ -138,13 +145,7 @@ class auth_controller
         if ($authenticated && is_array($user)) {
             session_regenerate_id(true);
 
-            $isAdmin = false;
-            foreach (($user["profiles_attach"] ?? []) as $profile) {
-                if (($profile["adm"] ?? 'no') === 'yes') {
-                    $isAdmin = true;
-                    break;
-                }
-            }
+            $isAdmin = self::hasAdminProfile($user["profiles_attach"] ?? []);
 
             if (!$isAdmin) {
                 $_SESSION["messages_app"]["danger"] = ["Acesso não autorizado. Este painel é restrito a administradores."];
