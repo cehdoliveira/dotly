@@ -32,6 +32,35 @@ SITE_HTTP_HOST=$(php -r '$_SERVER["HTTP_HOST"]=""; require "/var/www/app/site/ap
 MANAGER_HTTP_HOST=$(php -r '$_SERVER["HTTP_HOST"]=""; require "/var/www/app/manager/app/inc/kernel.php"; $h=explode(",", constant("ALLOWED_HOSTS")); echo trim($h[0]);' 2>/dev/null || true)
 echo "[entrypoint] SITE_HTTP_HOST=${SITE_HTTP_HOST:-<vazio>} MANAGER_HTTP_HOST=${MANAGER_HTTP_HOST:-<vazio>}"
 
+# Substituir placeholders __SITE_HOSTS__ / __MANAGER_HOSTS__ no nginx config
+# (em /etc/nginx/sites-available/app.conf) pelos hosts da marca derivados
+# do kernel.php (primeiro item de ALLOWED_HOSTS, mesmo pattern das linhas
+# 31-32). Necessario porque o default.conf e COPYado para a imagem
+# (Dockerfile:36) e nao e bind-mounted; sem isto, o container app nasceria
+# sem hostname da marca no server_name. Mantem o default.conf brand-neutral
+# (placeholders preservados) — init-whitelabel.sh continua a substitui-los
+# em commit para novas marcas; este bloco resolve o estado pós-build em
+# runtime com os hosts derivados do kernel. Limitacao: pega so o primeiro
+# host de ALLOWED_HOSTS (so um server_name por ambiente); suporte a multiplos
+# hosts pode ser expandido aqui se necessario.
+NGINX_APP_CONF="/etc/nginx/sites-available/app.conf"
+if [ -f "$NGINX_APP_CONF" ]; then
+    if [ -n "$SITE_HTTP_HOST" ] && [ -n "$MANAGER_HTTP_HOST" ]; then
+        sed -i "s|__SITE_HOSTS__|${SITE_HTTP_HOST}|g" "$NGINX_APP_CONF"
+        sed -i "s|__MANAGER_HOSTS__|${MANAGER_HTTP_HOST}|g" "$NGINX_APP_CONF"
+        echo "[entrypoint] nginx server_name populado: site=${SITE_HTTP_HOST} manager=${MANAGER_HTTP_HOST}"
+    else
+        echo "[entrypoint] AVISO: SITE_HTTP_HOST/MANAGER_HTTP_HOST vazios — placeholders __*_HOSTS__ residuais em $NGINX_APP_CONF" >&2
+    fi
+    # Fail-fast se ainda ha placeholders residuais — server_name com hostname
+    # __SITE_HOSTS__ lamber seria invalido e ACL ALLOWED_HOSTS do kernel
+    # rejeitaria qualquer request HTTP real.
+    if grep -q "__SITE_HOSTS__\|__MANAGER_HOSTS__" "$NGINX_APP_CONF"; then
+        echo "[entrypoint] ERRO: placeholders __SITE_HOSTS__/__MANAGER_HOSTS__ residual em $NGINX_APP_CONF apos tentativa de substituicao" >&2
+        exit 1
+    fi
+fi
+
 # Instalar crontab e iniciar cron apenas no container app
 if [ "$ENABLE_CRON" = "true" ]; then
     if [ -f "/etc/cron.txt" ]; then

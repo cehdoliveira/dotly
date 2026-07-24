@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS `users` (
 -- (ex.: por estado inconsistente em migrations_log) não lança erro de duplicata.
 -- Seed brand-neutral: nome 'Admin' e email 'admin@example.com' (placeholders
 -- substituíveis pelo init-whitelabel.sh).
+-- Senha bootstrap: admin123 (hash bcrypt abaixo). DEVE ser trocada no primeiro
+-- login via Configurações > Alterar Senha — ver auth_controller::set_password()
+-- (manager/app/inc/controller/auth_controller.php) e config_controller (linha 245).
+-- ATTENTION: este hash é público no repo. Cada marca instanciada via
+-- init-whitelabel.sh nasce com admin123 por conveniência de dev; o operador
+-- é responsável por trocar a senha antes de qualquer deploy público.
 INSERT IGNORE INTO
     `users` (
         `created_at`,
@@ -45,7 +51,7 @@ VALUES (
         'yes',
         'admin@example.com',
         'admin',
-        '!disabled!',
+        '$2y$12$T/wUIJS2YH8kjPvL3rKLZu3d35hyKViTczmLaPMlbtQIx0omZKQP.',
         'Admin',
-        'no'
+        'yes'
     );
