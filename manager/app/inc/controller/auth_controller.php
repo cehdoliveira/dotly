@@ -107,10 +107,10 @@ class auth_controller
             basic_redir($GLOBALS["login_url"]);
         }
 
-        // MySQL NOW() roda no fuso do container (UTC/SYSTEM), enquanto expires_at e
-        // gravado pelo PHP em America/Sao_Paulo (UTC-3, ver kernel.php). Comparar
-        // contra NOW() direto tornaria o token de reset (janela de 2h) sempre expirado
-        // (skew de ~3h). Mesmo padrao de site_controller::salesKpis().
+        // O fuso da conexao MySQL e alinhado ao do PHP em localPDO (plans/005), mas
+        // este $now continua vindo do PHP em vez de um NOW() na query: e mais direto
+        // de testar e mais estavel caso a conexao mude. Mesmo padrao de
+        // site_controller::salesKpis().
         $now = date("Y-m-d H:i:s");
 
         $users = new users_model();
@@ -160,8 +160,8 @@ class auth_controller
             basic_redir(sprintf($GLOBALS["set_password_url"], $token));
         }
 
-        // Ver comentario em display_set_password() sobre o skew NOW() (MySQL, UTC) vs
-        // expires_at (PHP, America/Sao_Paulo).
+        // Ver comentario em display_set_password() sobre o $now vir do PHP em vez de
+        // NOW() do MySQL.
         $now = date("Y-m-d H:i:s");
 
         $users = new users_model();

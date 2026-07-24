@@ -98,13 +98,12 @@ class OrderExpirer
         //
         // modified_at explicito (nao o now() automatico do update()): achado
         // do red-team (/ship) -- OrderReconciler::alertRecentlyExpiredPaidCharges()
-        // compara orders.modified_at contra uma janela calculada em PHP, e o
-        // container MySQL deste ambiente tem skew de fuso real com o PHP
-        // (America/Sao_Paulo) -- o mesmo skew ja documentado noutro lugar do
-        // repo. now() do MySQL quebraria essa comparacao silenciosamente. A
-        // ultima atribuicao a uma coluna repetida no SET vence no MySQL
-        // (verificado empiricamente), entao este modified_at = ? sobrescreve
-        // o now() que update() sempre injeta primeiro.
+        // compara orders.modified_at contra uma janela calculada em PHP. O fuso da
+        // conexao MySQL ja e alinhado ao do PHP em localPDO (plans/005), mas este
+        // carimbo explicito continua por ser mais direto/estavel do que depender do
+        // now() automatico do update(). A ultima atribuicao a uma coluna repetida no
+        // SET vence no MySQL (verificado empiricamente), entao este modified_at = ?
+        // sobrescreve o now() que update() sempre injeta primeiro.
         $result = $orderUpdate->update(
             [" status = 'expirado' ", " modified_at = ? "],
             "WHERE idx = ? AND status = 'aguardando_pagamento'",
@@ -151,7 +150,8 @@ class OrderExpirer
 
         // modified_at explicito pelo mesmo motivo do update de orders acima
         // (achado do adversarial review, /ship: o codigo raw anterior tambem
-        // carimbava este em PHP, nao so o de orders).
+        // carimbava este em PHP, nao so o de orders — continua assim mesmo com o
+        // fuso da conexao alinhado em localPDO, plans/005).
         $chargesModel = new pix_charges_model();
         $chargesModel->update(
             [" status = 'expirado' ", " modified_at = ? "],

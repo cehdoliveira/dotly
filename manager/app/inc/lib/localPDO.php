@@ -23,7 +23,16 @@ class localPDO
 				PDO::ATTR_EMULATE_PREPARES => false,
 			];
 			if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
-				$pdoOptions[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci";
+				// time_zone da SESSAO alinhado ao fuso do PHP (kernel.php:
+				// date_default_timezone_set). Sem isto, now()/NOW() do MySQL roda no
+				// fuso do container (UTC) enquanto todo carimbo feito em PHP usa
+				// America/Sao_Paulo: created_at/modified_at (carimbados pelo DOLModel
+				// via now()) ficavam 3h a frente de paid_at/expires_at/shipped_at, e
+				// time_ago(created_at) exibia pedido novo como "em 3 horas".
+				// date('P') devolve o offset atual ("-03:00"), entao a marca decide o
+				// fuso em um lugar so (kernel.php) e a conexao acompanha.
+				$pdoOptions[PDO::MYSQL_ATTR_INIT_COMMAND] =
+					"SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci, time_zone = '" . date('P') . "'";
 			}
 			$this->pdo = new PDO($dsn, $user, $pass, $pdoOptions);
 		} catch (PDOException $e) {

@@ -59,10 +59,9 @@ class site_controller
     {
         $monthStart = date('Y-m-01 00:00:00');
         $monthEnd   = date('Y-m-01 00:00:00', strtotime('+1 month'));
-        // MySQL NOW() roda no fuso do container (UTC/SYSTEM), enquanto expires_at e
-        // gravado pelo PHP em America/Sao_Paulo (UTC-3, ver kernel.php). Comparar
-        // contra NOW() direto tornaria "aguardando" sempre ~0 (skew de 3h contra uma
-        // janela de 30min). Vincula o "agora" calculado pelo PHP em vez disso.
+        // O fuso da conexao MySQL e alinhado ao do PHP em localPDO (plans/005), mas
+        // este $now continua vindo do PHP em vez de um NOW() na query: e mais direto
+        // de testar e mais estavel caso a conexao mude.
         $now = date('Y-m-d H:i:s');
 
         try {
