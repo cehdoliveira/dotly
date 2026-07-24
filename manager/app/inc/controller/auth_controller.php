@@ -1,19 +1,90 @@
 <?php
 class auth_controller
 {
-    public static function check_login(): bool
+    /**
+     * Cache da revalidacao por request: o guard pode ser avaliado mais de uma vez
+     * na mesma requisicao (uma rota por add_route), e uma query por avaliacao seria
+     * desperdicio. null = ainda nao revalidado nesta requisicao.
+     */
+    private static ?bool $revalidated = null;
+
+    /** True se algum perfil anexado (profiles_attach) tiver adm='yes'. Compartilhado
+     *  por check_login() e login() para as duas checagens nunca divergirem. */
+    private static function hasAdminProfile(array $profilesAttach): bool
     {
-        if (!isset($_SESSION[constant("cAppKey")]["credential"]["idx"])) {
-            return false;
-        } else {
-            return true;
+        foreach ($profilesAttach as $profile) {
+            if (($profile["adm"] ?? 'no') === 'yes') {
+                return true;
+            }
         }
+
+        return false;
     }
 
-	public function logout(array $info): never
-	{
-		validate_csrf($info["post"]["_csrf_token"] ?? null, $GLOBALS["home_url"]);
-		$_SESSION = [];
+    /**
+     * True apenas se a sessao tem credencial E o usuario continua sendo um admin
+     * valido NO BANCO (active='yes', enabled='yes', perfil com adm='yes') — os
+     * mesmos tres criterios que login() exige. Sem esta revalidacao, "Inativar" e
+     * "Remover" em /config so valiam para o proximo login: um admin revogado
+     * seguia com acesso total ate a sessao expirar por inatividade.
+     *
+     * Falha na revalidacao destroi a sessao: devolver false sem limpar deixaria a
+     * credencial morta no cookie, batendo no banco a cada request.
+     */
+    public static function check_login(): bool
+    {
+        if (self::$revalidated !== null) {
+            return self::$revalidated;
+        }
+
+        $idx = (int)($_SESSION[constant("cAppKey")]["credential"]["idx"] ?? 0);
+        if ($idx <= 0) {
+            return self::$revalidated = false;
+        }
+
+        try {
+            $users = new users_model();
+            $users->set_field([" idx "]);
+            $users->set_filter([" active = 'yes' ", " enabled = 'yes' ", " idx = ? "], [$idx]);
+            $users->set_paginate([1]);
+            $users->load_data(false);
+            $users->attach(["profiles"], class_field: [" adm "]);
+
+            $user = $users->data[0] ?? null;
+            $isAdmin = self::hasAdminProfile($user["profiles_attach"] ?? []);
+        } catch (\PDOException $e) {
+            // Fail-CLOSED de proposito, ao contrario do resto do repo (Redis/Kafka
+            // fail-open): aqui a duvida e sobre AUTORIZACAO de admin. Um erro de
+            // banco derruba a sessao e manda pro login, nao concede acesso.
+            Logger::getInstance()->error('check_login: falha ao revalidar credencial', [
+                'user_id' => $idx,
+                'error'   => $e->getMessage(),
+            ]);
+            self::destroy_session();
+            return self::$revalidated = false;
+        }
+
+        if ($user === null || !$isAdmin) {
+            Logger::getInstance()->warning('Sessao encerrada: credencial nao e mais admin valido', [
+                'user_id' => $idx,
+            ]);
+            self::destroy_session();
+            return self::$revalidated = false;
+        }
+
+        return self::$revalidated = true;
+    }
+
+    /** Reset do cache de revalidacao por request. Usado pelos testes (uma
+     *  requisicao real vive um processo, entao em producao nunca e chamado). */
+    public static function reset_revalidation_cache(): void
+    {
+        self::$revalidated = null;
+    }
+
+    private static function destroy_session(): void
+    {
+        $_SESSION = [];
         if (ini_get("session.use_cookies")) {
             $params = session_get_cookie_params();
             setcookie(
@@ -27,6 +98,12 @@ class auth_controller
             );
         }
         session_destroy();
+    }
+
+	public function logout(array $info): never
+	{
+		validate_csrf($info["post"]["_csrf_token"] ?? null, $GLOBALS["home_url"]);
+		self::destroy_session();
         basic_redir($GLOBALS["login_url"]);
     }
 
@@ -68,13 +145,7 @@ class auth_controller
         if ($authenticated && is_array($user)) {
             session_regenerate_id(true);
 
-            $isAdmin = false;
-            foreach (($user["profiles_attach"] ?? []) as $profile) {
-                if (($profile["adm"] ?? 'no') === 'yes') {
-                    $isAdmin = true;
-                    break;
-                }
-            }
+            $isAdmin = self::hasAdminProfile($user["profiles_attach"] ?? []);
 
             if (!$isAdmin) {
                 $_SESSION["messages_app"]["danger"] = ["Acesso não autorizado. Este painel é restrito a administradores."];
