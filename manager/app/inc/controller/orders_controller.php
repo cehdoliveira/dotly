@@ -604,7 +604,7 @@ class orders_controller
     public function markAsShipped(int $orderId, string $trackingCode): void
     {
         $model = new orders_model();
-        $model->set_field([' idx ', ' customer_name ', ' customer_mail ', ' shipped_at ']);
+        $model->set_field([' idx ', ' status ', ' customer_name ', ' customer_mail ', ' shipped_at ']);
         $model->set_filter([" active = 'yes' ", " idx = ? "], [$orderId]);
         $model->set_paginate([1]);
         $model->load_data(false);
@@ -615,6 +615,13 @@ class orders_controller
         }
         if (!empty($order['shipped_at'])) {
             throw new \RuntimeException('Pedido já foi marcado como enviado.');
+        }
+        if (in_array((string)$order['status'], ['expirado', 'cancelado'], true)) {
+            // Pedido expirado/cancelado teve o estoque devolvido (OrderExpirer) — marcar
+            // como enviado despacharia mercadoria que voltou pro estoque e pode ter sido
+            // vendida a outro comprador. 'pago' e 'aguardando_pagamento' seguem
+            // permitidos: a decisao de despachar antes da confirmacao e do operador.
+            throw new \RuntimeException('Pedido ' . $order['status'] . ' não pode ser marcado como enviado.');
         }
 
         $update = new orders_model();

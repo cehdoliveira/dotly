@@ -25,12 +25,12 @@ declare(strict_types=1);
  */
 final class OrderShipTest extends DBTestCase
 {
-    private function makeOrder(): int
+    private function makeOrder(string $status = 'pago'): int
     {
         $insert = new orders_model();
         $insert->populate([
             'token'          => bin2hex(random_bytes(16)),
-            'status'         => 'pago',
+            'status'         => $status,
             'customer_name'  => 'Cliente Envio Teste',
             'customer_mail'  => 'envio_' . uniqid() . '@example.com',
             'customer_phone' => '11999999999',
@@ -139,5 +139,39 @@ final class OrderShipTest extends DBTestCase
 
         $this->expectException(\RuntimeException::class);
         $controller->markAsShipped(999999999, '');
+    }
+
+    public function testMarkAsShippedThrowsForExpiredOrder(): void
+    {
+        // Pedido expirado ja teve o estoque devolvido (OrderExpirer) — plans/015.
+        $orderId = $this->makeOrder('expirado');
+
+        $controller = new orders_controller();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Pedido expirado não pode ser marcado como enviado.');
+        $controller->markAsShipped($orderId, 'BR123456789');
+    }
+
+    public function testMarkAsShippedThrowsForCancelledOrder(): void
+    {
+        $orderId = $this->makeOrder('cancelado');
+
+        $controller = new orders_controller();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Pedido cancelado não pode ser marcado como enviado.');
+        $controller->markAsShipped($orderId, 'BR123456789');
+    }
+
+    public function testMarkAsShippedStillWorksForPaidOrder(): void
+    {
+        // Regressao do caminho feliz: 'pago' continua permitido apos a guarda do Step 3.
+        $orderId = $this->makeOrder('pago');
+
+        $controller = new orders_controller();
+        $controller->markAsShipped($orderId, 'BR987654321');
+
+        $order = $this->loadOrder($orderId);
+        $this->assertSame('BR987654321', $order['tracking_code']);
+        $this->assertNotNull($order['shipped_at']);
     }
 }
