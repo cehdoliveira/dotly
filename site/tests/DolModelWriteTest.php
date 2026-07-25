@@ -151,4 +151,93 @@ final class DolModelWriteTest extends DBTestCase
             'seed da migration 004 vincula o profile admin ao usuario admin — join() deve encontrar essa linha'
         );
     }
+
+    /**
+     * `genre` tem DEFAULT 'wait' explicito em migrations/002_create_table_users.sql
+     * (coluna nao-unica, ao contrario de `mail`/`login` — evita colidir com fixtures
+     * de outros testes/processos que tambem exercitam o default do schema).
+     * No INSERT, populate() deve continuar descartando string vazia para essa
+     * coluna, preservando o comportamento historico (coluna usa o DEFAULT do
+     * schema em vez de gravar ''). Ver plans/012.
+     */
+    public function testInsertComStringVaziaUsaDefaultDoSchema(): void
+    {
+        $insert = new users_model();
+        $insert->populate([
+            'name'     => 'Insert Empty Genre Test',
+            'mail'     => 'dolmodel_write_' . uniqid() . '@example.com',
+            'login'    => 'dolmodel_write_' . uniqid(),
+            'password' => password_hash('secret', PASSWORD_BCRYPT),
+            'genre'    => '',
+        ]);
+        $id = $insert->save();
+        $this->assertIsInt($id);
+        $this->assertGreaterThan(0, $id, 'Insert deve retornar um ID valido');
+
+        $reload = new users_model();
+        $reload->set_field([" idx ", " genre "]);
+        $reload->set_filter(["idx = ?"], [$id]);
+        $reload->set_paginate([1]);
+        $reload->load_data();
+
+        $this->assertSame(
+            'wait',
+            $reload->data[0]['genre'],
+            'INSERT com genre = "" deve usar o DEFAULT do schema (migrations/002_create_table_users.sql), nao gravar string vazia'
+        );
+    }
+
+    public function testSaveSoComValoresVaziosNoUpdateExecuta(): void
+    {
+        $id = $this->newTestUser();
+
+        $update = new users_model();
+        $update->set_filter(["idx = ?"], [$id]);
+        $update->populate(["phone" => ""]);
+        $result = $update->save();
+
+        $this->assertInstanceOf(\PDOStatement::class, $result, 'save() com apenas valores vazios deve executar o UPDATE');
+
+        $reload = new users_model();
+        $reload->set_field([" idx ", " phone "]);
+        $reload->set_filter(["idx = ?"], [$id]);
+        $reload->set_paginate([1]);
+        $reload->load_data();
+
+        $this->assertSame('', $reload->data[0]['phone'], 'phone (DEFAULT NULL) deve ter sido gravado como string vazia, nao permanecer NULL');
+    }
+
+    public function testSaveSemNadaContinuaRetornandoFalse(): void
+    {
+        $update = new users_model();
+        $update->set_filter(["idx = ?"], [1]);
+        $update->populate([]);
+
+        $this->assertFalse($update->save(), 'save() sem nenhum dado deve continuar retornando false');
+    }
+
+    /**
+     * Regressao: populate() so com strings vazias, sem filtro de UPDATE (objeto recem
+     * criado, filtro default "active = 'yes'"), nao pode criar linha nenhuma — o INSERT
+     * ignora emptyValues (ver populate()/save()), entao esse caso nao tem nada para
+     * gravar e save() deve continuar sendo um no-op, como sempre foi.
+     */
+    public function testSaveSoComValoresVaziosSemFiltroDeUpdateNaoInsereLinha(): void
+    {
+        $countBefore = (int) localPDO::getInstance()->getPdo()
+            ->query("SELECT COUNT(*) FROM users")->fetchColumn();
+
+        $insert = new users_model();
+        $insert->populate([
+            'name'  => '',
+            'phone' => '',
+        ]);
+        $result = $insert->save();
+
+        $countAfter = (int) localPDO::getInstance()->getPdo()
+            ->query("SELECT COUNT(*) FROM users")->fetchColumn();
+
+        $this->assertFalse($result, 'save() sem valores nao-vazios no ramo de INSERT deve continuar retornando false');
+        $this->assertSame($countBefore, $countAfter, 'nenhuma linha deveria ter sido inserida');
+    }
 }

@@ -55,12 +55,22 @@ class DOLModel extends rootOBJ
 
 	public function save(): int|bool|\PDOStatement
 	{
-		if (empty($this->values)) {
+		// Se o filtro for APENAS o default "active = 'yes'" (definido na classe do model),
+		// trata como INSERT, nao UPDATE — mesma logica do codigo original.
+		$isUpdateFilter = !(count($this->filter) === 1 && ltrim(rtrim($this->filter[0])) === "active = 'yes'");
+
+		// No INSERT (nao-UPDATE), emptyValues nao entra no SET (ver ramo else abaixo),
+		// entao nao conta para decidir se ha algo para gravar — senao populate() so
+		// com strings vazias criaria uma linha fantasma em vez do no-op historico.
+		if (empty($this->values) && (empty($this->emptyValues) || !$isUpdateFilter)) {
 			return false;
 		}
 
 		if (isset($this->values["idx"])) {
 			unset($this->values["idx"]);
+		}
+		if (isset($this->emptyValues["idx"])) {
+			unset($this->emptyValues["idx"]);
 		}
 		if (isset($this->field["idx"])) {
 			unset($this->field["idx"]);
@@ -77,13 +87,17 @@ class DOLModel extends rootOBJ
 			$params[] = $val;
 		}
 
-		// Se o filtro for APENAS o default "active = 'yes'" (definido na classe do model),
-		// trata como INSERT, nao UPDATE — mesma logica do codigo original.
-		$isUpdateFilter = !(count($this->filter) === 1 && ltrim(rtrim($this->filter[0])) === "active = 'yes'");
-
 		if ($isUpdateFilter) {
 			$fi = " where " . implode(" and ", $this->filter) . " ";
 			$pa = isset($this->paginate) ? " limit " . implode(" , ", $this->paginate) . " " : "";
+
+			// Colunas esvaziadas de proposito: no UPDATE elas VAO para o SET.
+			// No ramo de INSERT (else) permanecem ignoradas — ver populate().
+			foreach ($this->emptyValues as $col => $val) {
+				$assignments[] = sprintf(" %s = ? ", $col);
+				$params[] = $val;
+			}
+
 			$assignments[] = " modified_at = now() ";
 			$assignments[] = " modified_by = ? ";
 			$params[] = $userId;
@@ -165,6 +179,11 @@ class DOLModel extends rootOBJ
 				if ($data[$key] !== '') {
 					$array[$key] = sprintf(" %s ", $key);
 					$this->values[$key] = $data[$key];
+				} else {
+					// String vazia: guardada separada. save() a inclui no UPDATE
+					// (permite limpar campo) e a ignora no INSERT (coluna nova usa o
+					// DEFAULT do schema, comportamento historico). Ver plans/012.
+					$this->emptyValues[$key] = '';
 				}
 			}
 		}

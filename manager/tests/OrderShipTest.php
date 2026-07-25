@@ -99,7 +99,7 @@ final class OrderShipTest extends DBTestCase
         $controller->markAsShipped($orderId, '');
 
         $order = $this->loadOrder($orderId);
-        $this->assertNull($order['tracking_code'], 'sem codigo informado, tracking_code permanece NULL');
+        $this->assertSame('', $order['tracking_code'], 'sem codigo informado, tracking_code e gravado vazio');
         $this->assertNotNull($order['shipped_at']);
 
         $queueRow = $this->loadShippedQueueRow($orderId);

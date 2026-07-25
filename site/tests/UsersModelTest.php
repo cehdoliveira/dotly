@@ -124,7 +124,7 @@ final class UsersModelTest extends DBTestCase
         $this->assertNull($reload->data[0]['email_token'], 'email_token deve ser gravado como NULL apos populate(null)');
     }
 
-    public function testPopulateStillDropsEmptyString(): void
+    public function testUpdateComStringVaziaLimpaColuna(): void
     {
         $insert = new users_model();
         $insert->populate([
@@ -147,6 +147,6 @@ final class UsersModelTest extends DBTestCase
         $reload->set_paginate([1]);
         $reload->load_data();
 
-        $this->assertSame('Test User', $reload->data[0]['name'], 'string vazia deve continuar sendo descartada');
+        $this->assertSame('', $reload->data[0]['name'], 'string vazia deve limpar a coluna no UPDATE');
     }
 }
