@@ -220,3 +220,9 @@ bin/init-whitelabel.sh \
   diferentes dos originais. Comentários que citam "plano NNN" são referência histórica a
   decisões que não são versionadas neste repo (`plans/` é gitignored) — trate como
   contexto, não como link.
+- **Timeout de sessão por inatividade.** `SESSION_LIFETIME` (segundos, `kernel.php`) é
+  aplicado em `app/inc/main.php`: passado esse tempo sem requisição, a sessão é descartada
+  (credencial do admin, carrinho, tokens CSRF) e um id novo é emitido. `session_start()`
+  fica em `public_html/index.php` e roda ANTES do kernel, por isso o timeout é aplicado no
+  `main.php`, não nas opções do `session_start()`. O `session.gc_maxlifetime` do php.ini
+  (7200) só existe para o GC não derrubar a sessão antes dessa janela.
