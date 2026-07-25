@@ -3,9 +3,10 @@ class customers_controller
 {
     /**
      * Plano 023: tela /clientes. "Cliente" NAO e uma entidade no banco — as tabelas
-     * customers/orders_customers foram removidas no plano 022 (migration 030). Aqui
+     * customers/orders_customers nao existem mais (removidas antes do squash de
+     * migrations — ver plans/001). Aqui
      * o cliente e um agregado de `orders` agrupado por `customer_mail` (o unico
-     * identificador com indice, migration 029): o pedido mais recente de cada e-mail
+     * identificador com indice, migrations/008_create_table_orders.sql): o pedido mais recente de cada e-mail
      * fornece nome/telefone/cidade/UF e a data da ultima compra. Por consequencia o
      * usuario Admin (que vive em `users`, nunca em `orders`) nunca aparece nesta lista.
      *
@@ -63,8 +64,8 @@ class customers_controller
      * com o idx da linha). Usado para o botao Desbloquear mirar exatamente a linha
      * que causou o bloqueio — nunca um novo match por identificador no momento do
      * submit, que poderia atingir uma linha diferente (ex.: telefone compartilhado
-     * por dois clientes reais). LIMIT 1 e deterministico: o indice funcional da
-     * migration 038 garante no maximo uma linha ativa por identificador.
+     * por dois clientes reais). LIMIT 1 e deterministico: o indice funcional de
+     * migrations/013_create_table_blocked_customers.sql garante no maximo uma linha ativa por identificador.
      */
     private function blockedIdxSql(string $o): string
     {
@@ -452,7 +453,7 @@ class customers_controller
      * de action() para permitir teste direto via ReflectionMethod (basic_redir()
      * termina o processo, mesmo motivo da extracao de isBlocked() no checkout_controller).
      * Retorna 'blocked' (insert novo), 'already_blocked' (pre-check ou corrida via
-     * UNIQUE key uniq_blocked_customers_active_mail, migration 038) ou 'db_error'
+     * UNIQUE key uniq_blocked_customers_active_mail, migrations/013_create_table_blocked_customers.sql) ou 'db_error'
      * (falha real, sem corrida detectada).
      */
     private function tryBlockCustomer(string $mail, string $cpf, string $phone, int $orderIdx): string

@@ -211,7 +211,7 @@ class InfinitePayGateway implements PixGateway
      * transaction_nsu volta no retorno para o webhook_controller persistir com
      * UNIQUE em pix_charges — sem isso, o mesmo transaction_nsu real (de um
      * pagamento legitimo) poderia ser reenviado num webhook forjado para
-     * confirmar um pedido DIFERENTE. Ver migration 042 e plano 031.
+     * confirmar um pedido DIFERENTE. Ver migrations/010_create_table_pix_charges.sql e plano 031.
      *
      * @return array{paid: bool, paid_amount_cents: ?int, transaction_nsu: ?string, retriable: bool}
      */

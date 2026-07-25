@@ -91,9 +91,9 @@ try {
         $failedCount
     );
 } catch (\Throwable $e) {
-    // Fail-open: ex. a migration 027 ainda nao rodou (1o tick do dispatcher
-    // antes do 1o tick de run_migrations.php num deploy novo) e email_queue
-    // ainda nao existe — nao e um erro fatal, so espera o proximo ciclo.
+    // Fail-open: ex. a migrations/012_create_table_email_queue.sql ainda nao rodou
+    // (1o tick do dispatcher antes do 1o tick de run_migrations.php num deploy novo)
+    // e email_queue ainda nao existe — nao e um erro fatal, so espera o proximo ciclo.
     error_log("dispatch_emails: ciclo abortado — " . $e->getMessage());
     echo "dispatch_emails: erro — " . $e->getMessage() . "\n";
 } finally {

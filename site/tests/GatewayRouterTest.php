@@ -9,7 +9,7 @@ declare(strict_types=1);
  *
  * Isolamento: GatewayRouter::pick() consulta TODOS os gateways enabled='yes'
  * sem filtro adicional — para nao depender de quais gateways ja estao
- * habilitados no banco (seeds da migration 011, ou estado deixado por outro
+ * habilitados no banco (seeds de migrations/007_create_table_payment_gateways.sql, ou estado deixado por outro
  * teste), desabilitamos temporariamente qualquer gateway ja habilitado no
  * setUp e restauramos no tearDown. Os gateways de teste usam slug unico
  * (uniqid()) e sao desativados no tearDown.
@@ -53,7 +53,7 @@ final class GatewayRouterTest extends DBTestCase
             $this->setGatewayEnabled($idx, 'yes');
         }
 
-        // Restaura o default seedado pela migration 046, independente da ordem
+        // Restaura o default seedado por migrations/011_create_table_settings.sql, independente da ordem
         // de execucao dos testes (mesma conexao/transacao global e compartilhada
         // entre todos os testes do processo — ver padrao em OrderPricingTest).
         $this->setSetting('velocity_paid_orders_per_hour', '0');
@@ -302,7 +302,7 @@ final class GatewayRouterTest extends DBTestCase
 
     public function testVelocityThresholdZeroKeepsSpikeSensitiveGatewayEligible(): void
     {
-        // Threshold 0 (default seedado pela migration 046) = detecao desligada:
+        // Threshold 0 (default seedado por migrations/011_create_table_settings.sql) = detecao desligada:
         // mesmo com pedidos pagos recentes, o gateway avoid_on_spike continua
         // elegivel.
         $this->setSetting('velocity_paid_orders_per_hour', '0');

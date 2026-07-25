@@ -42,7 +42,7 @@ final class OrderPricingTest extends DBTestCase
 
     protected function tearDown(): void
     {
-        // Restaura os defaults seedados pela migration 018, independente da
+        // Restaura os defaults seedados por migrations/011_create_table_settings.sql, independente da
         // ordem de execucao dos testes (mesma conexao/transacao global e
         // compartilhada entre todos os testes do processo).
         $this->setSetting('fee_percent_bps', '1000');
