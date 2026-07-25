@@ -33,6 +33,16 @@ final class CommonFunctionsTest extends TestCase
         $this->assertEquals("hello-world", $slug);
     }
 
+    public function testSlugRemoveCaracteresDoIntervaloAz(): void
+    {
+        // A-z (ASCII) engloba [ \ ] ^ _ ` entre 'Z' e 'a' — plans/015.
+        $slug = generate_slug("a[b\\c]d^e_f`g");
+        $this->assertEquals("a-b-c-d-e-f-g", $slug);
+        foreach (['[', '\\', ']', '^', '`'] as $char) {
+            $this->assertStringNotContainsString($char, $slug);
+        }
+    }
+
     public function testRemoveAccents(): void
     {
         $text = remove_accents("José São Água");
