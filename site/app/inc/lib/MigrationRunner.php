@@ -245,6 +245,17 @@ class MigrationRunner
 		$this->pdo->beginTransaction();
 		try {
 			foreach ($queries as $query) {
+				// O split por ';' nao entende string literal: uma migration com ';' dentro
+				// de aspas seria partida no meio, e os fragmentos executariam como SQL
+				// invalido, aparecendo em migrations_log como erro de sintaxe sem pista da
+				// causa. Aspas em quantidade impar denunciam esse caso — falhar aqui, com
+				// mensagem explicita, e melhor que executar fragmento.
+				if (substr_count($query, "'") % 2 !== 0 || substr_count($query, '"') % 2 !== 0) {
+					throw new Exception(
+						'Migration com aspas nao balanceadas apos o split por ";" — provavel ";" dentro de string literal. ' .
+						'Reescreva a migration evitando ";" em literal. Fragmento: ' . substr($query, 0, 120)
+					);
+				}
 				$this->pdo->exec($query);
 			}
 			if ($this->pdo->inTransaction()) {

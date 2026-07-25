@@ -129,6 +129,44 @@ final class MigrationRunnerTest extends TestCase
         $this->assertEmpty($results['failed'], 'comentarios com ; nao devem quebrar o splitter de statements');
     }
 
+    public function testMigrationComPontoEVirgulaEmLiteralFalhaComMensagemClara(): void
+    {
+        // O split por ';' nao entende string literal: um ';' dentro de aspas
+        // parte a migration no meio, e os fragmentos executam como SQL invalido.
+        // A guarda de aspas nao balanceadas (plans/015) deve pegar isso e falhar
+        // com mensagem clara, em vez de deixar o erro de sintaxe confuso subir.
+        $name = '914_semicolon_in_literal_' . uniqid();
+        $this->writeMigration(
+            $name,
+            "CREATE TABLE IF NOT EXISTS test_mr_literal (id INT PRIMARY KEY, val VARCHAR(50));\n" .
+            "INSERT INTO test_mr_literal (id, val) VALUES (1, 'a;b');\n" .
+            "DROP TABLE IF EXISTS test_mr_literal;"
+        );
+
+        $runner = new MigrationRunner($this->con, $this->tmpDir);
+        $runner->setLogger(function ($m) {});
+
+        try {
+            $results = $runner->run();
+
+            $this->assertContains($name, $results['failed']);
+            $this->assertEmpty($results['executed']);
+
+            $stmt = $this->con->getPdo()->prepare(
+                "SELECT status, error_message FROM migrations_log WHERE migration_name = ?"
+            );
+            $stmt->execute([$name]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $this->assertSame('failed', $row['status']);
+            $this->assertStringContainsString('aspas nao balanceadas', $row['error_message']);
+        } finally {
+            // O CREATE TABLE (DDL) da migration falhada ja fez commit implicito no
+            // MySQL antes de chegar na guarda de aspas — o DROP TABLE da propria
+            // migration nunca roda. Limpa manualmente para nao vazar a tabela.
+            $this->con->getPdo()->exec('DROP TABLE IF EXISTS test_mr_literal');
+        }
+    }
+
     public function testStatusReflectsPendingThenExecuted(): void
     {
         $name = '913_status_migration_' . uniqid();
