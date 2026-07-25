@@ -33,6 +33,13 @@ if (!class_exists('rootOBJ')) {
 		protected ?array $group = null;
 		protected ?string $direct_query = null;
 		protected array $values = [];
+		/**
+		 * Valores vindos de populate() que sao string vazia. Ficam separados de
+		 * $values porque no INSERT eles precisam ser OMITIDOS (para a coluna usar o
+		 * DEFAULT do schema) e no UPDATE precisam ser GRAVADOS (sem isto, nenhum
+		 * campo de texto do manager podia ser esvaziado). Ver plans/012.
+		 */
+		protected array $emptyValues = [];
 		protected array $filterParams = [];
 
 		public function __call(string $method, array $paramters): mixed
