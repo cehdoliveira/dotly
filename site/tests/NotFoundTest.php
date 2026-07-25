@@ -47,5 +47,6 @@ final class NotFoundTest extends TestCase
 
         $fallbackBlock = substr($source, $fallbackStart);
         $this->assertStringNotContainsString('basic_redir($home_url)', $fallbackBlock);
+        $this->assertStringContainsString('$noindex = true;', $fallbackBlock);
     }
 }

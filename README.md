@@ -234,6 +234,9 @@ bin/init-whitelabel.sh \
   também não.
 - **Rota inexistente responde 404**, não redirect. O fallback de `public_html/index.php`
   (quando `Dispatcher::exec()` devolve `false`) emite `http_response_code(404)`, loga o path e
-  renderiza `ui/page/not_found.php` com `$noindex = true`. Redirecionamentos de rota
-  **legítimos** (`/usuarios` → `/clientes`, `/gateways` → `/config`, `/index.html` → home)
-  continuam 302 — não confunda os dois casos ao adicionar rota nova.
+  renderiza `ui/page/not_found.php`. No **site**, também seta `$noindex = true` antes do
+  `head.php` (evita indexação de URL morta); o **manager** não tem mecanismo de
+  robots/noindex no `head.php`, então seu 404 não define essa variável — é esperado, não
+  uma divergência a corrigir. Redirecionamentos de rota **legítimos**
+  (`/usuarios` → `/clientes`, `/gateways` → `/config`, `/index.html` → home) continuam
+  302 — não confunda os dois casos ao adicionar rota nova.

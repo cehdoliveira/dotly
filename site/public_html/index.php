@@ -123,7 +123,7 @@ $dispatcher->add_route("POST", "/acompanhar-pedido", "track_order_controller:sea
 if (!$dispatcher->exec()) {
 	http_response_code(404);
 	Logger::getInstance()->info('404 no site', [
-		'path'   => (string) (parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH) ?: "/"),
+		'path'   => $salesPath,
 		'method' => $_SERVER["REQUEST_METHOD"] ?? '',
 	]);
 	$noindex = true;
