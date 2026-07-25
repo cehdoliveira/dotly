@@ -92,7 +92,10 @@ function remove_accents(?string $text = null): string
 function generate_slug(?string $text = null): string
 {
   $text = strtolower(remove_accents($text ?? ''));
-  $text = preg_replace("/[^0-9A-z]+/", "_", $text);
+  // A-z (ASCII) engloba [ \ ] ^ _ ` entre 'Z' e 'a' — esses caracteres sobreviviam
+  // ao slug e chegavam a nome de arquivo de upload e a slug de produto. A-Za-z e
+  // o intervalo pretendido.
+  $text = preg_replace("/[^0-9A-Za-z]+/", "_", $text);
   $text = preg_replace("/\s+?|_+|-+/", "-", $text);
   return $text;
 }

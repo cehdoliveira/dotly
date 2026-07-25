@@ -5,12 +5,18 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * TestCase com isolamento de banco via transacoes.
+ * TestCase para testes que tocam banco.
  *
- * Cada teste inicia uma transacao no setUp e faz rollback no tearDown.
- * Isso garante que nenhum dado de um teste contamine o proximo,
- * eliminando a dependencia de ordem de execucao e permitindo
- * paralelismo futuro.
+ * ATENCAO ao isolamento real: setUp() abre transacao em $this->con, uma conexao
+ * PROPRIA — mas os models (DOLModel) usam localPDO::getInstance(), que e OUTRA
+ * conexao (singleton do processo). Fixtures criadas via model NAO sao revertidas
+ * pelo rollback do tearDown(): elas ficam na transacao do singleton, que so termina
+ * no fim do processo (localPDO::__destruct faz rollback de seguranca) — ou seja,
+ * nao vazam para o banco, mas SAO visiveis para os testes seguintes do mesmo
+ * processo. Por isso a suite usa uniqid() nos identificadores de fixture: siga esse
+ * padrao em teste novo, nao confie em "cada teste comeca do zero".
+ *
+ * $this->con serve para consultas diretas do proprio teste.
  */
 abstract class DBTestCase extends TestCase
 {

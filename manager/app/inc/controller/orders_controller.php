@@ -11,6 +11,14 @@ class orders_controller
     private const VALID_STATUSES = ['aguardando_pagamento', 'pago', 'cancelado', 'expirado'];
 
     /**
+     * Subconjunto de VALID_STATUSES cujo estoque ja foi devolvido (OrderExpirer)
+     * e que por isso nao pode ser despachado — ver guard em markAsShipped().
+     * Mantenha em sincronia se um novo status terminal com devolucao de
+     * estoque for adicionado a VALID_STATUSES.
+     */
+    private const NON_SHIPPABLE_STATUSES = ['expirado', 'cancelado'];
+
+    /**
      * Pseudo-opcao do multi-select de status. "Enviado" NAO e um status de
      * pagamento (fica fora de VALID_STATUSES): o estado de envio e derivado de
      * `shipped_at IS NOT NULL` (ver docblock da classe e markAsShipped()). Como
@@ -604,7 +612,7 @@ class orders_controller
     public function markAsShipped(int $orderId, string $trackingCode): void
     {
         $model = new orders_model();
-        $model->set_field([' idx ', ' customer_name ', ' customer_mail ', ' shipped_at ']);
+        $model->set_field([' idx ', ' status ', ' customer_name ', ' customer_mail ', ' shipped_at ']);
         $model->set_filter([" active = 'yes' ", " idx = ? "], [$orderId]);
         $model->set_paginate([1]);
         $model->load_data(false);
@@ -615,6 +623,13 @@ class orders_controller
         }
         if (!empty($order['shipped_at'])) {
             throw new \RuntimeException('Pedido já foi marcado como enviado.');
+        }
+        if (in_array((string)$order['status'], self::NON_SHIPPABLE_STATUSES, true)) {
+            // Pedido expirado/cancelado teve o estoque devolvido (OrderExpirer) — marcar
+            // como enviado despacharia mercadoria que voltou pro estoque e pode ter sido
+            // vendida a outro comprador. 'pago' e 'aguardando_pagamento' seguem
+            // permitidos: a decisao de despachar antes da confirmacao e do operador.
+            throw new \RuntimeException('Pedido ' . $order['status'] . ' não pode ser marcado como enviado.');
         }
 
         $update = new orders_model();

@@ -133,6 +133,9 @@ services:
     image: provectuslabs/kafka-ui:v0.7.2
     container_name: kafka_ui
     restart: always
+    # Ferramenta de inspecao de dev: nao sobe no `up -d` padrao (nem em producao).
+    # Para usar: docker compose -f docker/docker-compose.yml --profile dev up -d kafka_ui
+    profiles: ["dev"]
     depends_on:
       - kafka
     environment:

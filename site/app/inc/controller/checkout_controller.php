@@ -241,6 +241,12 @@ class checkout_controller
         // token normalmente nesses casos.
         if (!empty($submittedToken)) {
             $_SESSION['_finalized_tokens'][$submittedToken] = $token;
+            // Teto: a guarda de duplo-submit so precisa dos ultimos checkouts desta
+            // sessao (a janela de graca do CSRF e de 10s). Sem teto, o array cresce
+            // um item por pedido finalizado e nunca encolhe.
+            if (count($_SESSION['_finalized_tokens']) > 20) {
+                $_SESSION['_finalized_tokens'] = array_slice($_SESSION['_finalized_tokens'], -20, null, true);
+            }
         }
 
         basic_redir(sprintf($payment_url, $token));

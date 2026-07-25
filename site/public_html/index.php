@@ -46,6 +46,12 @@ require_once($_SERVER["DOCUMENT_ROOT"] . "/../app/inc/main.php");
 // resposta). Exposta via $GLOBALS pois head.php é incluído dentro do escopo local dos
 // métodos de controller, não no escopo global deste arquivo.
 $GLOBALS["cspNonce"] = random_token(16);
+// unsafe-eval e exigido pelo Alpine.js 3 (build CDN em ui/common/foot.php): ele
+// avalia expressoes de x-data/x-show em runtime via Function(). O nonce por request
+// cobre os scripts inline; jsdelivr esta liberado para bootstrap/sweetalert2/alpine,
+// todos com integrity+crossorigin no foot.php. Remover 'unsafe-eval' exige trocar
+// pelo build CSP-friendly do Alpine e revalidar TODAS as telas — follow-up, nao
+// mudanca cosmetica.
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-" . $GLOBALS["cspNonce"] . "' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; object-src 'none'; base-uri 'self'");
 
 // Janela de vendas (plano 037): fora da janela / sem estoque / override
