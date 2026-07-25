@@ -141,24 +141,24 @@ final class OrderShipTest extends DBTestCase
         $controller->markAsShipped(999999999, '');
     }
 
-    public function testMarkAsShippedThrowsForExpiredOrder(): void
+    /** @return array<string, array{0: string}> */
+    public static function nonShippableStatusProvider(): array
     {
-        // Pedido expirado ja teve o estoque devolvido (OrderExpirer) — plans/015.
-        $orderId = $this->makeOrder('expirado');
-
-        $controller = new orders_controller();
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Pedido expirado não pode ser marcado como enviado.');
-        $controller->markAsShipped($orderId, 'BR123456789');
+        return [
+            'expirado'  => ['expirado'],
+            'cancelado' => ['cancelado'],
+        ];
     }
 
-    public function testMarkAsShippedThrowsForCancelledOrder(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('nonShippableStatusProvider')]
+    public function testMarkAsShippedThrowsForNonShippableStatus(string $status): void
     {
-        $orderId = $this->makeOrder('cancelado');
+        // Pedido expirado/cancelado ja teve o estoque devolvido (OrderExpirer) — plans/015.
+        $orderId = $this->makeOrder($status);
 
         $controller = new orders_controller();
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Pedido cancelado não pode ser marcado como enviado.');
+        $this->expectExceptionMessage('Pedido ' . $status . ' não pode ser marcado como enviado.');
         $controller->markAsShipped($orderId, 'BR123456789');
     }
 
