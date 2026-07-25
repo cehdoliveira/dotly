@@ -214,3 +214,9 @@ bin/init-whitelabel.sh \
   reconfirmação — estoque é movimentado só no checkout, nunca no webhook.
   Não "consertar" o `return true` adicionando validação de assinatura que o
   PSP não oferece.
+- **Referência a migration em comentário usa o NOME do arquivo**, nunca o número solto
+  (`migrations/010_create_table_pix_charges.sql`, não "migration 010"). O squash de
+  migrations renumerou tudo uma vez e os números soltos passaram a apontar para arquivos
+  diferentes dos originais. Comentários que citam "plano NNN" são referência histórica a
+  decisões que não são versionadas neste repo (`plans/` é gitignored) — trate como
+  contexto, não como link.

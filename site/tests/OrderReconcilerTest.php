@@ -33,7 +33,7 @@ final class OrderReconcilerTest extends DBTestCase
         $model->load_data(false);
 
         $idx = $model->data[0]['idx'] ?? null;
-        $this->assertNotNull($idx, "Gateway seed '$slug' nao encontrado (migration 011)");
+        $this->assertNotNull($idx, "Gateway seed '$slug' nao encontrado (migrations/007_create_table_payment_gateways.sql)");
 
         return (int)$idx;
     }

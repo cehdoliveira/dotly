@@ -31,7 +31,7 @@ final class WebhookIdempotencyTest extends DBTestCase
         $model->load_data(false);
 
         $idx = $model->data[0]['idx'] ?? null;
-        $this->assertNotNull($idx, "Gateway seed '$slug' nao encontrado (migration 011)");
+        $this->assertNotNull($idx, "Gateway seed '$slug' nao encontrado (migrations/007_create_table_payment_gateways.sql)");
 
         return (int)$idx;
     }
@@ -350,7 +350,7 @@ final class WebhookIdempotencyTest extends DBTestCase
     }
 
     /**
-     * Garante em nivel de banco (migration 042) que o mesmo transaction_nsu real
+     * Garante em nivel de banco (migrations/010_create_table_pix_charges.sql) que o mesmo transaction_nsu real
      * da InfinitePay nao pode ficar gravado em duas cobrancas diferentes — a
      * defesa contra reenviar um pagamento legitimo pra confirmar um pedido
      * diferente. O webhook_controller ja faz uma checagem previa (achado do

@@ -115,7 +115,7 @@ final class CustomerBlockTest extends DBTestCase
      * separados). O controller foi corrigido para um INSERT...SELECT...WHERE
      * NOT EXISTS unico (reduz, mas sozinho nao fecha, a janela de corrida
      * entre dois cliques concorrentes — quem fecha de verdade e o UNIQUE KEY
-     * da migration 035, ver testDuplicateMailInsertViolatesUniqueConstraint...)
+     * de migrations/013_create_table_blocked_customers.sql, ver testDuplicateMailInsertViolatesUniqueConstraint...)
      * — ver testInsertWhereNotExistsInsertsOnceThenNoOpsOnRepeat
      * abaixo, que reproduz a query atual literalmente. Este helper continua
      * validando a mesma semantica de idempotencia (qualquer um dos 3
@@ -192,7 +192,7 @@ final class CustomerBlockTest extends DBTestCase
      * 'bloquear') executa hoje: um INSERT...SELECT...WHERE NOT EXISTS unico,
      * que reduz (mas sozinho nao fecha) a janela de corrida entre dois
      * cliques concorrentes em "Bloquear" — o UNIQUE KEY em customer_mail
-     * (migration 035) e quem fecha de verdade. rowCount() e o sinal que o
+     * (migrations/013_create_table_blocked_customers.sql) e quem fecha de verdade. rowCount() e o sinal que o
      * controller usa para decidir a mensagem: 1 linha => "Cliente bloqueado"
      * (success), 0 linhas => "Este cliente já está bloqueado" (info).
      */
@@ -270,7 +270,7 @@ final class CustomerBlockTest extends DBTestCase
      * EXISTS sozinho nao fecha a corrida entre dois cliques concorrentes em
      * "Bloquear": MySQL 8.0 usa REPEATABLE READ por padrao, entao o NOT
      * EXISTS e uma leitura nao-bloqueante — dois inserts concorrentes podem
-     * ambos passar a checagem antes de qualquer um comitar. A migration 035
+     * ambos passar a checagem antes de qualquer um comitar. migrations/013_create_table_blocked_customers.sql
      * troca a KEY nao-unica de customer_mail por um UNIQUE, fechando a
      * corrida a nivel de banco: o segundo INSERT concorrente estoura o
      * UNIQUE, e customers_controller::action() captura essa
@@ -293,7 +293,7 @@ final class CustomerBlockTest extends DBTestCase
         $infoMessage = null;
         try {
             // Mesmo customer_mail, cpf/phone diferentes: so o UNIQUE em
-            // customer_mail (migration 035) deve barrar — cpf/phone nao tem
+            // customer_mail (migrations/013_create_table_blocked_customers.sql) deve barrar — cpf/phone nao tem
             // constraint proprio.
             $this->insertBlockedRaw($mail, '22222222222', '11922222222');
         } catch (RuntimeException $e) {
@@ -304,7 +304,7 @@ final class CustomerBlockTest extends DBTestCase
 
         $this->assertTrue(
             $caught,
-            'segunda insercao com o mesmo customer_mail deve violar o UNIQUE key (migration 035) e lancar RuntimeException'
+            'segunda insercao com o mesmo customer_mail deve violar o UNIQUE key (migrations/013_create_table_blocked_customers.sql) e lancar RuntimeException'
         );
         $this->assertSame(
             "Este cliente já está bloqueado.",
@@ -351,7 +351,7 @@ final class CustomerBlockTest extends DBTestCase
 
         $caught = false;
         try {
-            // customer_mail e NOT NULL (migration 034) — um valor NULL explicito
+            // customer_mail e NOT NULL (migrations/013_create_table_blocked_customers.sql) — um valor NULL explicito
             // estoura essa constraint, nao a UNIQUE (que exige duplicidade).
             // Falha real, sem qualquer relacao com "ja bloqueado".
             $block->execute_raw_prepared(
@@ -364,7 +364,7 @@ final class CustomerBlockTest extends DBTestCase
 
         $this->assertTrue(
             $caught,
-            'INSERT com customer_mail NULL deve violar o NOT NULL (migration 034) e lancar RuntimeException'
+            'INSERT com customer_mail NULL deve violar o NOT NULL (migrations/013_create_table_blocked_customers.sql) e lancar RuntimeException'
         );
 
         // Mesma query de recheck que o catch(RuntimeException) do controller executa.
@@ -421,7 +421,7 @@ final class CustomerBlockTest extends DBTestCase
     }
 
     /**
-     * Este e o cenario que a migration 038 conserta: sem o indice escopado a
+     * Este e o cenario que migrations/013_create_table_blocked_customers.sql conserta: sem o indice escopado a
      * active, o segundo bloqueio bateria no UNIQUE da linha soft-deletada e
      * falharia.
      */

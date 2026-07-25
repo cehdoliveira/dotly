@@ -14,7 +14,7 @@ declare(strict_types=1);
  *
  * Isolamento: violatesUnlimitedInvariant() varre TODOS os gateways
  * active='yes' sem filtro adicional — para nao depender de quais gateways ja
- * estao habilitados no banco (seeds da migration 011), desabilitamos
+ * estao habilitados no banco (seeds de migrations/007_create_table_payment_gateways.sql), desabilitamos
  * temporariamente qualquer gateway ja habilitado no setUp e restauramos no
  * tearDown, mesmo padrao de GatewayRouterTest (site). Os gateways de teste
  * usam slug unico (uniqid()) e sao desativados no tearDown.

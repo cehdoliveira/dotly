@@ -5,8 +5,10 @@
  * set_admin_password.php
  *
  * CLI para definir/reativar a senha do usuário admin (login "admin").
- * Necessário após a rotação da migration 007, que desabilita o admin
- * seedado e invalida a senha default commitada no repositório.
+ * O seed em migrations/002_create_table_users.sql já nasce com `enabled='yes'`
+ * e uma senha bootstrap pública (hash commitado no repositório) — este script
+ * troca essa senha por uma nova (e força `enabled='yes'` de volta, caso o
+ * login tenha sido desabilitado por outro processo).
  *
  * A nova senha é lida via STDIN (nunca via argumento de linha de comando,
  * que ficaria visível em `ps`/histórico do shell).

@@ -137,8 +137,8 @@ class webhook_controller
                 // transaction_nsu e um UUID gerado pela InfinitePay so apos pagamento
                 // real — mas nada impede o MESMO transaction_nsu de ser reenviado num
                 // webhook forjado para confirmar um pedido DIFERENTE. Verifica aqui
-                // (defesa rapida) e a UNIQUE key da migration 042 fecha a corrida de
-                // verdade (TOCTOU entre esta checagem e o save() abaixo).
+                // (defesa rapida) e a UNIQUE key de migrations/010_create_table_pix_charges.sql
+                // fecha a corrida de verdade (TOCTOU entre esta checagem e o save() abaixo).
                 if ($infinitepayTransactionNsu !== null) {
                     $existingByTransaction = new pix_charges_model();
                     $existingByTransaction->set_filter(
@@ -197,11 +197,12 @@ class webhook_controller
                 'status'  => 'pago',
                 'paid_at' => $paidAt,
             ];
-            // Grava o transaction_nsu reconfirmado (InfinitePay). A UNIQUE key da
-            // migration 042 e a garantia real contra replay — se outro processo
-            // ganhou a corrida entre a checagem acima e este save(), o INSERT/UPDATE
-            // falha aqui com erro de constraint (RuntimeException, capturado pelo
-            // catch de processEvent(), nada e commitado).
+            // Grava o transaction_nsu reconfirmado (InfinitePay). A UNIQUE key de
+            // migrations/010_create_table_pix_charges.sql e a garantia real contra
+            // replay — se outro processo ganhou a corrida entre a checagem acima e
+            // este save(), o INSERT/UPDATE falha aqui com erro de constraint
+            // (RuntimeException, capturado pelo catch de processEvent(), nada e
+            // commitado).
             if ($infinitepayTransactionNsu !== null) {
                 $chargeUpdateData['transaction_nsu'] = $infinitepayTransactionNsu;
             }
