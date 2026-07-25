@@ -226,3 +226,9 @@ bin/init-whitelabel.sh \
   fica em `public_html/index.php` e roda ANTES do kernel, por isso o timeout é aplicado no
   `main.php`, não nas opções do `session_start()`. O `session.gc_maxlifetime` do php.ini
   (7200) só existe para o GC não derrubar a sessão antes dessa janela.
+- **Cancelamento de pedido é administrativo e só antes do pagamento.**
+  `/pedidos/{id}/cancelar` (POST, CSRF) leva `aguardando_pagamento` → `cancelado` e devolve
+  o estoque reservado, reusando `OrderExpirer::expireOne($id, $now, 'cancelado')` — a mesma
+  rotina do cron de expiração, com guarda de corrida. Pedido `pago` NÃO é cancelável por
+  aqui (exigiria estorno no PSP, que nenhum adapter implementa) e pedido já enviado
+  também não.

@@ -36,5 +36,19 @@ document.addEventListener('alpine:init', () => {
 
             if (result.isConfirmed) form.submit();
         },
+
+        async confirmCancel(form) {
+            const result = await Swal.fire({
+                title: 'Cancelar pedido?',
+                html: 'O pedido será cancelado e o estoque reservado voltará para os produtos. Esta ação não pode ser desfeita.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Cancelar pedido',
+                cancelButtonText: 'Voltar',
+                confirmButtonColor: '#dc3545',
+            });
+
+            if (result.isConfirmed) form.submit();
+        },
     }));
 });

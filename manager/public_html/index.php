@@ -101,6 +101,7 @@ $dispatcher->add_route("GET",  "/pedidos/exportar", "orders_controller:export", 
 $dispatcher->add_route("GET",  "/pedidos/([0-9]+)", "orders_controller:show",  $authGuard, $params);
 $dispatcher->add_route("GET",  "/pedidos/([0-9]+)/etiqueta", "orders_controller:label", $authGuard, $params);
 $dispatcher->add_route("POST", "/pedidos/([0-9]+)/enviar", "orders_controller:ship", $authGuard, $params);
+$dispatcher->add_route("POST", "/pedidos/([0-9]+)/cancelar", "orders_controller:cancel", $authGuard, $params);
 
 // Configurações — conta do admin + gateways de pagamento (requer autenticação)
 $dispatcher->add_route("GET",  "/config", "config_controller:index",  $authGuard, $params);

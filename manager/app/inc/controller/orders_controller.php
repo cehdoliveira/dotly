@@ -2,11 +2,13 @@
 class orders_controller
 {
     /**
-     * Plano 003: leitura de `orders`. Sem acoes de escrita sobre `status` — quem
-     * transiciona o status de pagamento e o webhook e o job de reconciliacao
-     * (plano 002); ver escape hatch no plano se pedirem "marcar como pago" manual.
-     * Plano 016 adiciona a 1a acao de escrita do controller (ship()), mas ela so
-     * grava tracking_code/shipped_at — nunca `status`.
+     * Plano 003: leitura de `orders`. O status de PAGAMENTO continua exclusivo do
+     * webhook e do job de reconciliacao (plano 002); ver escape hatch no plano se
+     * pedirem "marcar como pago" manual. Plano 016 adiciona as 1as acoes de
+     * escrita do controller: ship() so grava tracking_code/shipped_at (nunca
+     * `status`); cancel() e a unica excecao — grava `status = 'cancelado'`, mas
+     * so a partir de 'aguardando_pagamento' (transicao administrativa explicita,
+     * nao uma confirmacao de pagamento).
      */
     private const VALID_STATUSES = ['aguardando_pagamento', 'pago', 'cancelado', 'expirado'];
 
@@ -681,5 +683,79 @@ class orders_controller
                 'error'     => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Cancelamento administrativo de pedido NAO pago (plans/016): sai de
+     * 'aguardando_pagamento' para 'cancelado' e devolve o estoque reservado no
+     * checkout, reusando OrderExpirer::expireOne() — a mesma rotina do cron de
+     * expiracao, com guarda de corrida e pre-agregacao por produto.
+     *
+     * Nao cancela pedido 'pago': isso exigiria estorno no PSP, que nenhum adapter
+     * implementa. Nao mexe na maquina de status de PAGAMENTO (webhook) — a
+     * transicao aqui e explicita e so a partir de 'aguardando_pagamento'.
+     */
+    public function cancel(array $info): void
+    {
+        global $orders_url, $order_url;
+
+        $idx = (int)($info[1] ?? 0);
+        if ($idx <= 0) {
+            basic_redir($orders_url);
+        }
+
+        $post = $info['post'] ?? [];
+        validate_csrf($post['_csrf_token'] ?? null, $orders_url);
+
+        try {
+            $this->cancelOrder($idx);
+        } catch (\RuntimeException $e) {
+            $_SESSION["messages_app"]["danger"] = [$e->getMessage()];
+            basic_redir(sprintf($order_url, $idx));
+        }
+
+        $_SESSION["messages_app"]["success"] = ["Pedido cancelado. O estoque reservado foi devolvido."];
+        basic_redir(sprintf($order_url, $idx));
+    }
+
+    /**
+     * Extraido sem basic_redir() para ser testavel diretamente — mesmo padrao de
+     * markAsShipped() e de checkout_controller::lockAndValidateCart().
+     *
+     * @throws \RuntimeException pedido inexistente, ja enviado, ou em status que nao
+     *   admite cancelamento ('pago', 'expirado', 'cancelado').
+     */
+    public function cancelOrder(int $orderId): void
+    {
+        $model = new orders_model();
+        $model->set_field([' idx ', ' status ', ' shipped_at ']);
+        $model->set_filter([" active = 'yes' ", " idx = ? "], [$orderId]);
+        $model->set_paginate([1]);
+        $model->load_data(false);
+
+        $order = $model->data[0] ?? null;
+        if (!$order) {
+            throw new \RuntimeException('Pedido não encontrado.');
+        }
+        if (!empty($order['shipped_at'])) {
+            throw new \RuntimeException('Pedido já enviado não pode ser cancelado.');
+        }
+        if ((string)$order['status'] !== 'aguardando_pagamento') {
+            throw new \RuntimeException('Somente pedido aguardando pagamento pode ser cancelado (status atual: ' . $order['status'] . ').');
+        }
+
+        $result = (new OrderExpirer())->expireOne($orderId, date('Y-m-d H:i:s'), 'cancelado');
+        if ($result === null) {
+            // Guarda de corrida: o pedido saiu de 'aguardando_pagamento' entre a
+            // leitura acima e o UPDATE (ex.: webhook confirmou o pagamento). Nada foi
+            // escrito — nao insista.
+            throw new \RuntimeException('O pedido mudou de status durante o cancelamento. Recarregue a página.');
+        }
+
+        Logger::getInstance()->warning('Pedido cancelado no manager', [
+            'orders_id'       => $orderId,
+            'restocked_units' => $result,
+            'by_user'         => $_SESSION[constant("cAppKey")]["credential"]["idx"] ?? 0,
+        ]);
     }
 }
