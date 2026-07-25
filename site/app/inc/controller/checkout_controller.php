@@ -249,7 +249,7 @@ class checkout_controller
             Logger::getInstance()->warning('checkout_controller::payment sem cobranca ativa para pedido', [
                 'orders_id' => $order['idx'],
             ]);
-            $_SESSION["messages_app"]["danger"] = ["Não conseguimos gerar seu PIX para este pedido. Refaça o pedido — o estoque foi liberado."];
+            $_SESSION["messages_app"]["danger"] = ["Não conseguimos gerar seu PIX para este pedido. Refaça o pedido em alguns instantes — estamos liberando o estoque."];
             basic_redir($home_url);
         }
 
@@ -654,6 +654,14 @@ class checkout_controller
             localPDO::getInstance()->commit();
             localPDO::getInstance()->beginTransaction();
         } catch (\Throwable $e) {
+            // Reverte escrita parcial de expireOne() (orders/stock/pix_charges na
+            // mesma transacao sem commit intermediario) — mesmo padrao de
+            // OrderExpirer::expireDueOrders(). Sem isso, o proximo basic_redir()
+            // do chamador comitaria a parte incompleta (ex.: pedido marcado
+            // 'expirado' sem o estoque devolvido), e o cron nunca mais revisita o
+            // pedido (guarda de corrida exige status = 'aguardando_pagamento').
+            localPDO::getInstance()->rollback();
+            localPDO::getInstance()->beginTransaction();
             Logger::getInstance()->error('checkout_controller: compensacao de cobranca falhou — cron de expiracao devolvera o estoque', [
                 'orders_id' => $orderId,
                 'error'     => $e->getMessage(),
