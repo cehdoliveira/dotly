@@ -11,6 +11,31 @@ require_once(constant("cRootServer_APP") . "/inc/lists.php");
 require_once(constant("cRootServer_APP") . "/inc/lib/CommonFunctions.php");
 require_once(constant("cRootServer_APP") . "/inc/urls.php");
 
+// Timeout de inatividade aplicado pela APLICACAO. Este e o primeiro ponto do
+// request em que o kernel.php ja foi carregado (a constante existe) e a sessao ja
+// esta aberta (session_start em public_html/index.php, que roda antes do kernel e
+// por isso nao pode ler a constante). Sem isto, SESSION_LIFETIME era uma constante
+// morta e quem decidia era o session.gc_maxlifetime do php.ini — mais curto que a
+// janela anunciada e probabilistico (gc por sorteio).
+$_session_lifetime = defined('SESSION_LIFETIME') ? (int) constant('SESSION_LIFETIME') : 0;
+if ($_session_lifetime > 0) {
+	$_session_last = isset($_SESSION['_last_activity']) ? (int) $_SESSION['_last_activity'] : null;
+	if ($_session_last !== null && (time() - $_session_last) > $_session_lifetime) {
+		// Sessao ociosa: descarta TUDO (credencial do admin, carrinho, tokens) e
+		// comeca uma sessao limpa com id novo, para nao reaproveitar o id antigo.
+		$_SESSION = [];
+		session_destroy();
+		// session_start() aqui NAO e redundante: session_destroy() deixa
+		// session_status() em PHP_SESSION_NONE, e session_regenerate_id()
+		// exige sessao ativa - sem este start(), o regenerate falha e o id
+		// antigo (ja marcado como expirado) seria reaproveitado.
+		session_start();
+		session_regenerate_id(true);
+	}
+	$_SESSION['_last_activity'] = time();
+}
+unset($_session_lifetime, $_session_last);
+
 if (empty($_SESSION['_csrf_token'])) {
 	$_SESSION['_csrf_token'] = random_token();
 }

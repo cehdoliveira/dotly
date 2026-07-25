@@ -125,8 +125,11 @@ define("UPLOAD_ALLOWED_TYPES", "jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx");
 define("SITE_CANONICAL_URL", "http://localhost");
 
 // ===== SESSÃO =====
+// Timeout de INATIVIDADE em segundos, aplicado por app/inc/main.php: apos este
+// tempo sem nenhuma requisicao, a sessao e descartada (credencial do admin,
+// carrinho, tokens) e um id novo e emitido. 0 desliga o timeout da aplicacao (o
+// session.gc_maxlifetime do php.ini continua valendo).
 define("SESSION_LIFETIME", 7200);
-define("SESSION_USE_REDIS", false);
 
 // ===== INICIALIZAR REDIS =====
 if (REDIS_ENABLED && class_exists("RedisCache")) {
