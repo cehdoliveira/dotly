@@ -204,34 +204,6 @@ if (extension_loaded('rdkafka') && class_exists('RdKafka\Producer')) {
         }
 
         /**
-         * Envia email com template
-         *
-         * @param string $to Destinatário
-         * @param string $subject Assunto
-         * @param string $template Nome do template
-         * @param array $data Dados para o template
-         * @return bool
-         */
-        public function sendTemplate(string $to, string $subject, string $template, array $data = []): bool
-        {
-            // Carregar template (pode ser implementado conforme necessidade)
-            $templatePath = cAppRoot . "/ui/email/{$template}.php";
-
-            if (!file_exists($templatePath)) {
-                error_log("Template de email não encontrado: {$template}");
-                return false;
-            }
-
-            // Renderizar template
-            ob_start();
-            extract($data);
-            include $templatePath;
-            $body = ob_get_clean();
-
-            return $this->sendEmail($to, $subject, $body, ['isHtml' => true]);
-        }
-
-        /**
          * Envia email com anexos
          *
          * @param string $to Destinatário
@@ -309,11 +281,6 @@ if (extension_loaded('rdkafka') && class_exists('RdKafka\Producer')) {
                 $subject,
                 $body
             );
-        }
-
-        public function sendTemplate(string $to, string $subject, string $template, array $data = []): bool
-        {
-            return self::send($to, $subject, '');
         }
 
         public function sendWithAttachments(string $to, string $subject, string $body, array $attachments): bool

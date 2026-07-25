@@ -151,7 +151,7 @@ function set_url(string $url = "", array $params = []): string
  * que o cookie de sessão seja enviado corretamente e que não haja race condition
  * entre a escrita da sessão no Redis e o próximo request do browser.
  */
-function basic_redir(string|array $url, int $code = 302, bool $use_html = false, bool $rollback = false): never
+function basic_redir(string|array $url, int $code = 302, bool $rollback = false): never
 {
   if (is_array($url)) {
     $url = $url[0];
@@ -175,26 +175,7 @@ function basic_redir(string|array $url, int $code = 302, bool $use_html = false,
     header('Pragma: no-cache');
   }
 
-  if ($use_html) {
-    $dir = constant("AppLayout");
-    ob_start();
-    switch ($code) {
-      case 301:
-        require($dir . "301.html");
-        break;
-      case 404:
-        require($dir . "404.html");
-        break;
-      default:
-        require($dir . "302.html");
-        break;
-    }
-    $out = ob_get_contents();
-    ob_end_clean();
-    print str_replace("{location}", $url, $out);
-  } else {
-    header("Location: " . $url, true, $code);
-  }
+  header("Location: " . $url, true, $code);
   exit();
 }
 
@@ -408,24 +389,6 @@ function canonical_url(string $canonicalConstant): string
   throw new RuntimeException(
     "URL canônica não configurada: defina {$canonicalConstant} ou ALLOWED_HOSTS no kernel.php"
   );
-}
-
-function check_rate_limit(?object $redis, string $key, int $max): bool
-{
-  if (!$redis) return false;
-  return (int)($redis->get($key) ?? 0) >= $max;
-}
-
-function increment_rate_limit(?object $redis, string $key, int $window): void
-{
-  if (!$redis) return;
-  // RedisCache expoe increment(), nao incr() — mesmo bug corrigido em
-  // check_and_increment_rate_limit() (ver comentario la). Esta funcao nao tem
-  // nenhuma chamada em controller/teste hoje — nunca foi exercida de verdade.
-  $count = $redis->increment($key);
-  if ($count === 1) {
-    $redis->expire($key, $window);
-  }
 }
 
 function ratelimit_fallback_dir(): string
