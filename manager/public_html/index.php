@@ -113,6 +113,21 @@ $dispatcher->add_route("POST", "/config/usuarios", "config_controller:users_acti
 $dispatcher->add_route("GET",  "/gateways", "function:basic_redir", $authGuard, $config_url);
 
 // Executar dispatcher e tratar falhas
+// Rota inexistente: 404 de verdade. Redirecionar pra home (comportamento anterior)
+// devolvia 302 + home para qualquer URL invalida — soft 404 que jogava o admin na
+// home sem dizer por que. Nao autenticado numa rota inexistente cai aqui tambem
+// (rota que nao casa com nenhum padrao nunca passa pelo $authGuard do Dispatcher —
+// so rota existente com guard reprovado redireciona pro login, ver Dispatcher::exec()).
 if (!$dispatcher->exec()) {
-	basic_redir($home_url);
+	http_response_code(404);
+	Logger::getInstance()->info('404 no manager', [
+		'path'   => (string) (parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH) ?: "/"),
+		'method' => $_SERVER["REQUEST_METHOD"] ?? '',
+	]);
+	include(constant("cRootServer") . "ui/common/head.php");
+	include(constant("cRootServer") . "ui/common/header.php");
+	include(constant("cRootServer") . "ui/page/not_found.php");
+	include(constant("cRootServer") . "ui/common/footer.php");
+	include(constant("cRootServer") . "ui/common/foot.php");
+	exit;
 }
