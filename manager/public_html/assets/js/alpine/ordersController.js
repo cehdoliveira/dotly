@@ -46,6 +46,7 @@ document.addEventListener('alpine:init', () => {
                 confirmButtonText: 'Cancelar pedido',
                 cancelButtonText: 'Voltar',
                 confirmButtonColor: '#dc3545',
+                focusCancel: true,
             });
 
             if (result.isConfirmed) form.submit();
