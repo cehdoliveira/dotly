@@ -197,6 +197,14 @@ final class DolModelWriteTest extends DBTestCase
         $result = $update->save();
 
         $this->assertInstanceOf(\PDOStatement::class, $result, 'save() com apenas valores vazios deve executar o UPDATE');
+
+        $reload = new users_model();
+        $reload->set_field([" idx ", " phone "]);
+        $reload->set_filter(["idx = ?"], [$id]);
+        $reload->set_paginate([1]);
+        $reload->load_data();
+
+        $this->assertSame('', $reload->data[0]['phone'], 'phone (DEFAULT NULL) deve ter sido gravado como string vazia, nao permanecer NULL');
     }
 
     public function testSaveSemNadaContinuaRetornandoFalse(): void
@@ -206,5 +214,30 @@ final class DolModelWriteTest extends DBTestCase
         $update->populate([]);
 
         $this->assertFalse($update->save(), 'save() sem nenhum dado deve continuar retornando false');
+    }
+
+    /**
+     * Regressao: populate() so com strings vazias, sem filtro de UPDATE (objeto recem
+     * criado, filtro default "active = 'yes'"), nao pode criar linha nenhuma — o INSERT
+     * ignora emptyValues (ver populate()/save()), entao esse caso nao tem nada para
+     * gravar e save() deve continuar sendo um no-op, como sempre foi.
+     */
+    public function testSaveSoComValoresVaziosSemFiltroDeUpdateNaoInsereLinha(): void
+    {
+        $countBefore = (int) localPDO::getInstance()->getPdo()
+            ->query("SELECT COUNT(*) FROM users")->fetchColumn();
+
+        $insert = new users_model();
+        $insert->populate([
+            'name'  => '',
+            'phone' => '',
+        ]);
+        $result = $insert->save();
+
+        $countAfter = (int) localPDO::getInstance()->getPdo()
+            ->query("SELECT COUNT(*) FROM users")->fetchColumn();
+
+        $this->assertFalse($result, 'save() sem valores nao-vazios no ramo de INSERT deve continuar retornando false');
+        $this->assertSame($countBefore, $countAfter, 'nenhuma linha deveria ter sido inserida');
     }
 }

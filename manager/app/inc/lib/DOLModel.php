@@ -55,7 +55,14 @@ class DOLModel extends rootOBJ
 
 	public function save(): int|bool|\PDOStatement
 	{
-		if (empty($this->values) && empty($this->emptyValues)) {
+		// Se o filtro for APENAS o default "active = 'yes'" (definido na classe do model),
+		// trata como INSERT, nao UPDATE — mesma logica do codigo original.
+		$isUpdateFilter = !(count($this->filter) === 1 && ltrim(rtrim($this->filter[0])) === "active = 'yes'");
+
+		// No INSERT (nao-UPDATE), emptyValues nao entra no SET (ver ramo else abaixo),
+		// entao nao conta para decidir se ha algo para gravar — senao populate() so
+		// com strings vazias criaria uma linha fantasma em vez do no-op historico.
+		if (empty($this->values) && (empty($this->emptyValues) || !$isUpdateFilter)) {
 			return false;
 		}
 
@@ -79,10 +86,6 @@ class DOLModel extends rootOBJ
 			$assignments[] = sprintf(" %s = ? ", $col);
 			$params[] = $val;
 		}
-
-		// Se o filtro for APENAS o default "active = 'yes'" (definido na classe do model),
-		// trata como INSERT, nao UPDATE — mesma logica do codigo original.
-		$isUpdateFilter = !(count($this->filter) === 1 && ltrim(rtrim($this->filter[0])) === "active = 'yes'");
 
 		if ($isUpdateFilter) {
 			$fi = " where " . implode(" and ", $this->filter) . " ";
