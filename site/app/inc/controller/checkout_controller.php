@@ -1,10 +1,12 @@
 <?php
 
 /**
- * Checkout transacional. `finalize()` e a UNICA rota que grava o pedido — toda
- * ela roda dentro da transacao global aberta por localPDO e e commitada pelo
- * basic_redir() final. Ver plano 002 Passo 9 para a justificativa de manter a
- * chamada HTTP ao PSP dentro da transacao (tradeoff consciente).
+ * Checkout transacional. `finalize()` e a UNICA rota que grava o pedido. O
+ * pedido (persistOrder()) e commitado explicitamente ANTES da chamada HTTP ao
+ * PSP (plano 008) — nao ha rede entre lockAndValidateCart() e esse commit, pra
+ * nao segurar os locks de `products` durante a latencia do gateway. Falha do
+ * PSP compensa devolvendo o estoque (compensateFailedCharge()), em vez de
+ * depender de rollback da transacao.
  */
 class checkout_controller
 {
@@ -121,56 +123,28 @@ class checkout_controller
         $pricing = OrderPricing::compute($finalLines, $subtotalCents);
         $totalCents = $pricing['total_cents'];
 
-        // Baixa o estoque por linha.
-        $productsModel = new products_model();
-        foreach ($finalLines as $line) {
-            $productsModel->update(
-                [" stock = stock - ? "],
-                "WHERE idx = ?",
-                [$line['units_needed'], $line['products_id']]
-            );
-        }
-
         $token = random_token(16);
         $expiresAt = date('Y-m-d H:i:s', strtotime('+30 minutes'));
+        $orderId = $this->persistOrder($finalLines, $pricing, $customer, $token, $expiresAt);
 
-        $order = new orders_model();
-        $order->populate([
-            'token'           => $token,
-            'status'          => 'aguardando_pagamento',
-            'customer_name'   => $customer['name'],
-            'customer_mail'   => $customer['mail'],
-            'customer_phone'  => $customer['phone'],
-            'customer_cpf'    => $customer['cpf'],
-            'ship_zip'        => $customer['zip'],
-            'ship_street'     => $customer['street'],
-            'ship_number'     => $customer['number'],
-            'ship_complement' => $customer['complement'],
-            'ship_district'   => $customer['district'],
-            'ship_city'       => $customer['city'],
-            'ship_uf'         => $customer['uf'],
-            'subtotal_cents'  => $pricing['subtotal_cents'],
-            'fee_percent_cents' => $pricing['fee_percent_cents'],
-            'fee_fixed_cents' => $pricing['fee_fixed_cents'],
-            'fee_infinity_cents' => $pricing['fee_infinity_cents'],
-            'total_cents'     => $pricing['total_cents'],
-            'expires_at'      => $expiresAt,
-        ]);
-        $orderId = $order->save();
-
-        foreach ($finalLines as $line) {
-            $item = new order_items_model();
-            $item->populate([
-                'orders_id'        => $orderId,
-                'products_id'      => $line['products_id'],
-                'product_name'     => $line['name'],
-                'variant'          => $line['variant'],
-                'qty'              => $line['qty'],
-                'unit_price_cents' => $line['unit_price_cents'],
-                'line_total_cents' => $line['line_total_cents'],
-            ]);
-            $item->save();
-        }
+        // COMMIT EXPLICITO — ANTES de qualquer chamada ao PSP, de proposito.
+        // lockAndValidateCart() abriu SELECT ... FOR UPDATE nas linhas de products;
+        // manter a transacao aberta durante createCharge() (CURLOPT_TIMEOUT 10s +
+        // CONNECTTIMEOUT 5s) segura esses locks por toda a latencia do PSP, e
+        // compradores simultaneos do MESMO produto serializam atras da rede — um PSP
+        // lento parava a loja daquele item, com um worker PHP-FPM preso por comprador.
+        // Commitando aqui, o estoque ja esta reservado de forma duravel e os locks
+        // caem em milissegundos. Se o PSP falhar, compensateFailedCharge() devolve o
+        // estoque explicitamente (abaixo) — e, se o processo morrer entre este commit
+        // e a cobranca, o pedido fica 'aguardando_pagamento' sem cobranca e o cron
+        // expire_orders.php (5 min) o expira devolvendo o estoque em <= 30 min.
+        //
+        // Excecao consciente ao "controllers nao comitam na mao" (README) — mesma
+        // natureza das excecoes ja existentes em webhook_controller::processEvent() e
+        // orders_controller::markAsShipped(), e pelo mesmo motivo: a fronteira
+        // transacional e parte do comportamento correto desta rota.
+        localPDO::getInstance()->commit();
+        localPDO::getInstance()->beginTransaction();
 
         // Nao expomos a lista de produtos ao PSP: mandamos um unico item generico
         // e neutro ("{loja} - Pedido #{idx}") com o valor total ja com taxas — nome
@@ -227,8 +201,9 @@ class checkout_controller
                 "error"     => $e->getMessage(),
                 "orders_id" => $orderId,
             ]);
+            $this->compensateFailedCharge($orderId);
             $_SESSION["messages_app"]["danger"] = ["Não conseguimos gerar seu PIX agora. Tente de novo em instantes."];
-            basic_redir($checkout_url, rollback: true);
+            basic_redir($checkout_url);
         }
 
         Cart::clear();
@@ -268,7 +243,13 @@ class checkout_controller
         $charge = $this->findLatestActiveCharge((int)$order['idx']);
 
         if ($charge === null) {
-            $_SESSION["messages_app"]["danger"] = ["Pedido não encontrado."];
+            // Pedido existe mas nao tem cobranca ativa: a criacao no PSP falhou (ou o
+            // processo morreu entre o commit do pedido e a cobranca). O pedido sera
+            // expirado pelo cron e o estoque devolvido; o comprador pode refazer.
+            Logger::getInstance()->warning('checkout_controller::payment sem cobranca ativa para pedido', [
+                'orders_id' => $order['idx'],
+            ]);
+            $_SESSION["messages_app"]["danger"] = ["Não conseguimos gerar seu PIX para este pedido. Refaça o pedido — o estoque foi liberado."];
             basic_redir($home_url);
         }
 
@@ -384,6 +365,73 @@ class checkout_controller
             'city'     => (string)($data['localidade'] ?? ''),
             'uf'       => strtoupper((string)($data['uf'] ?? '')),
         ]);
+    }
+
+    /**
+     * Grava o pedido: baixa de estoque por linha + INSERT em orders + INSERT dos
+     * itens. NAO comita — quem decide a fronteira transacional e finalize().
+     * Publico de proposito, para ser exercitavel sem passar pelo exit() de
+     * basic_redir() (mesmo padrao de lockAndValidateCart()).
+     *
+     * @param array<int, array{products_id:int, variant:string, qty:int, units_needed:int,
+     *   name:string, unit_price_cents:int, line_total_cents:int}> $finalLines
+     * @param array{subtotal_cents:int, fee_percent_cents:int, fee_fixed_cents:int,
+     *   fee_infinity_cents:int, total_cents:int} $pricing
+     * @param array{name:string, mail:string, phone:string, cpf:string, zip:string,
+     *   street:string, number:string, complement:string, district:string, city:string,
+     *   uf:string} $customer
+     */
+    public function persistOrder(array $finalLines, array $pricing, array $customer, string $token, string $expiresAt): int
+    {
+        // Baixa o estoque por linha.
+        $productsModel = new products_model();
+        foreach ($finalLines as $line) {
+            $productsModel->update(
+                [" stock = stock - ? "],
+                "WHERE idx = ?",
+                [$line['units_needed'], $line['products_id']]
+            );
+        }
+
+        $order = new orders_model();
+        $order->populate([
+            'token'           => $token,
+            'status'          => 'aguardando_pagamento',
+            'customer_name'   => $customer['name'],
+            'customer_mail'   => $customer['mail'],
+            'customer_phone'  => $customer['phone'],
+            'customer_cpf'    => $customer['cpf'],
+            'ship_zip'        => $customer['zip'],
+            'ship_street'     => $customer['street'],
+            'ship_number'     => $customer['number'],
+            'ship_complement' => $customer['complement'],
+            'ship_district'   => $customer['district'],
+            'ship_city'       => $customer['city'],
+            'ship_uf'         => $customer['uf'],
+            'subtotal_cents'  => $pricing['subtotal_cents'],
+            'fee_percent_cents' => $pricing['fee_percent_cents'],
+            'fee_fixed_cents' => $pricing['fee_fixed_cents'],
+            'fee_infinity_cents' => $pricing['fee_infinity_cents'],
+            'total_cents'     => $pricing['total_cents'],
+            'expires_at'      => $expiresAt,
+        ]);
+        $orderId = $order->save();
+
+        foreach ($finalLines as $line) {
+            $item = new order_items_model();
+            $item->populate([
+                'orders_id'        => $orderId,
+                'products_id'      => $line['products_id'],
+                'product_name'     => $line['name'],
+                'variant'          => $line['variant'],
+                'qty'              => $line['qty'],
+                'unit_price_cents' => $line['unit_price_cents'],
+                'line_total_cents' => $line['line_total_cents'],
+            ]);
+            $item->save();
+        }
+
+        return $orderId;
     }
 
     /**
@@ -580,6 +628,36 @@ class checkout_controller
         } catch (\Throwable $e) {
             Logger::getInstance()->error("checkout isBlocked failed", ["error" => $e->getMessage()]);
             return false;
+        }
+    }
+
+    /**
+     * Compensacao do pedido ja commitado quando a criacao da cobranca no PSP falha:
+     * marca o pedido como 'expirado' e devolve ao estoque as unidades reservadas,
+     * reusando OrderExpirer::expireOne() — a MESMA rotina do cron de expiracao, com
+     * guarda de corrida (só afeta pedido ainda em 'aguardando_pagamento') e com a
+     * pre-agregacao por products_id que evita subestimar o estoque quando o pedido
+     * tem unidade solta + caixa do mesmo produto.
+     *
+     * Fail-soft: se a propria compensacao falhar, loga e segue — o cron
+     * expire_orders.php ainda vai expirar o pedido (e devolver o estoque) em no
+     * maximo 30 minutos. Nunca lanca para cima, para nao trocar a mensagem de erro
+     * do comprador por uma tela branca.
+     *
+     * Publico de proposito, para ser exercitavel sem passar pelo exit() de
+     * basic_redir() (mesmo padrao de lockAndValidateCart()).
+     */
+    public function compensateFailedCharge(int $orderId): void
+    {
+        try {
+            (new OrderExpirer())->expireOne($orderId, date('Y-m-d H:i:s'));
+            localPDO::getInstance()->commit();
+            localPDO::getInstance()->beginTransaction();
+        } catch (\Throwable $e) {
+            Logger::getInstance()->error('checkout_controller: compensacao de cobranca falhou — cron de expiracao devolvera o estoque', [
+                'orders_id' => $orderId,
+                'error'     => $e->getMessage(),
+            ]);
         }
     }
 
