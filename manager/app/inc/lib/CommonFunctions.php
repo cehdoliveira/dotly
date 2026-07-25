@@ -549,6 +549,63 @@ function verify_password_with_migration(string $storedHash, string $inputPasswor
   return $authenticated;
 }
 
+/**
+ * Subdiretorio de upload valido? Vazio, com ".." ou com "\" e recusado (path
+ * traversal). Extraida de handle_upload() para ser testavel sem upload HTTP real
+ * (a guarda is_uploaded_file() torna a funcao inteira intestavel de fora).
+ */
+function upload_valid_subdir(string $subDir): bool
+{
+  $subDir = trim($subDir, '/');
+  return $subDir !== '' && !str_contains($subDir, '..') && !str_contains($subDir, '\\');
+}
+
+/**
+ * Extensao real derivada do MIME detectado por finfo — NUNCA da extensao enviada
+ * pelo cliente. Devolve null quando o MIME nao esta no mapa ou quando a extensao
+ * resultante nao esta na allowlist (UPLOAD_ALLOWED_TYPES / $options).
+ *
+ * @param string[] $allowedTypes extensoes permitidas, minusculas
+ */
+function upload_resolve_extension(string $mime, array $allowedTypes): ?string
+{
+  $mimeMap = [
+    'image/jpeg'    => 'jpg',
+    'image/png'     => 'png',
+    'image/gif'     => 'gif',
+    'image/webp'    => 'webp',
+    'image/avif'    => 'avif',
+    'application/pdf' => 'pdf',
+    'application/msword' => 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+    'application/vnd.ms-excel' => 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+    'text/csv'      => 'csv',
+  ];
+
+  $realExt = $mimeMap[$mime] ?? null;
+  if (!$realExt || !in_array($realExt, $allowedTypes)) {
+    return null;
+  }
+
+  return $realExt;
+}
+
+/**
+ * Nome final do arquivo: slug do nome original (max 80 chars, 'arquivo' se vazio)
+ * + timestamp + extensao de destino. LIMITACAO conhecida: a granularidade do
+ * timestamp e de 1 segundo, entao dois uploads do mesmo nome no mesmo segundo
+ * colidem (o 2o sobrescreve).
+ */
+function upload_target_filename(string $originalName, string $targetExt, ?string $stamp = null): string
+{
+  $base = pathinfo($originalName, PATHINFO_FILENAME);
+  $base = generate_slug($base);
+  $base = substr($base, 0, 80) ?: 'arquivo';
+
+  return sprintf('%s_%s.%s', $base, $stamp ?? date('Y-m-d_H-i-s'), $targetExt);
+}
+
 function handle_upload(array $file, string $subDir, array $options = []): string|false
 {
   if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
@@ -562,7 +619,7 @@ function handle_upload(array $file, string $subDir, array $options = []): string
   }
 
   $subDir = trim($subDir, '/');
-  if ($subDir === '' || str_contains($subDir, '..') || str_contains($subDir, '\\')) {
+  if (!upload_valid_subdir($subDir)) {
     Logger::getInstance()->warning("Upload invalid subDir", ["subDir" => $subDir]);
     return false;
   }
@@ -580,22 +637,8 @@ function handle_upload(array $file, string $subDir, array $options = []): string
   $mime  = finfo_file($finfo, $file['tmp_name']);
   finfo_close($finfo);
 
-  $mimeMap = [
-    'image/jpeg'    => 'jpg',
-    'image/png'     => 'png',
-    'image/gif'     => 'gif',
-    'image/webp'    => 'webp',
-    'image/avif'    => 'avif',
-    'application/pdf' => 'pdf',
-    'application/msword' => 'doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-    'application/vnd.ms-excel' => 'xls',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-    'text/csv'      => 'csv',
-  ];
-
-  $realExt = $mimeMap[$mime] ?? null;
-  if (!$realExt || !in_array($realExt, $allowedTypes)) {
+  $realExt = upload_resolve_extension((string)$mime, $allowedTypes);
+  if ($realExt === null) {
     Logger::getInstance()->warning("Upload invalid type", [
       "mime"        => $mime,
       "allowed"     => $allowedTypes,
@@ -621,14 +664,10 @@ function handle_upload(array $file, string $subDir, array $options = []): string
     return false;
   }
 
-  $originalName = pathinfo($file['name'], PATHINFO_FILENAME);
-  $originalName = generate_slug($originalName);
-  $originalName = substr($originalName, 0, 80) ?: 'arquivo';
-
   $isImage     = str_starts_with($mime, 'image/');
   $shouldConvert = $convert && $isImage && extension_loaded('gd');
   $targetExt   = $shouldConvert ? $convert : $realExt;
-  $filename    = sprintf('%s_%s.%s', $originalName, date('Y-m-d_H-i-s'), $targetExt);
+  $filename    = upload_target_filename((string)$file['name'], $targetExt);
   $destPath    = $uploadDir . '/' . $filename;
 
   if ($shouldConvert) {
