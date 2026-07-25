@@ -25,6 +25,10 @@ if ($_session_lifetime > 0) {
 		// comeca uma sessao limpa com id novo, para nao reaproveitar o id antigo.
 		$_SESSION = [];
 		session_destroy();
+		// session_start() aqui NAO e redundante: session_destroy() deixa
+		// session_status() em PHP_SESSION_NONE, e session_regenerate_id()
+		// exige sessao ativa - sem este start(), o regenerate falha e o id
+		// antigo (ja marcado como expirado) seria reaproveitado.
 		session_start();
 		session_regenerate_id(true);
 	}
