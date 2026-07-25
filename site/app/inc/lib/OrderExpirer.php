@@ -88,9 +88,18 @@ class OrderExpirer
      * Retorna as unidades devolvidas ao estoque se o pedido foi expirado
      * agora, ou null se a guarda de corrida encontrou o pedido ja resolvido
      * por outro caminho (nesse caso nada e escrito).
+     *
+     * $finalStatus permite reusar exatamente esta rotina para o CANCELAMENTO
+     * administrativo (plans/016): o efeito e o mesmo — sair de
+     * 'aguardando_pagamento' e devolver o estoque reservado — mudando so o status
+     * final. Default 'expirado' preserva o comportamento do cron.
      */
-    public function expireOne(int $ordersId, string $now): ?int
+    public function expireOne(int $ordersId, string $now, string $finalStatus = 'expirado'): ?int
     {
+        if (!in_array($finalStatus, ['expirado', 'cancelado'], true)) {
+            throw new \InvalidArgumentException("status final invalido: {$finalStatus}");
+        }
+
         $orderUpdate = new orders_model();
 
         // Transicao atomica com guarda de corrida: so afeta a linha se ela
@@ -105,9 +114,9 @@ class OrderExpirer
         // SET vence no MySQL (verificado empiricamente), entao este modified_at = ?
         // sobrescreve o now() que update() sempre injeta primeiro.
         $result = $orderUpdate->update(
-            [" status = 'expirado' ", " modified_at = ? "],
+            [" status = ? ", " modified_at = ? "],
             "WHERE idx = ? AND status = 'aguardando_pagamento'",
-            [$now, $ordersId]
+            [$finalStatus, $now, $ordersId]
         );
         if ($result->rowCount() !== 1) {
             return null;
@@ -152,6 +161,11 @@ class OrderExpirer
         // (achado do adversarial review, /ship: o codigo raw anterior tambem
         // carimbava este em PHP, nao so o de orders — continua assim mesmo com o
         // fuso da conexao alinhado em localPDO, plans/005).
+        //
+        // Este 'expirado' fica literal mesmo quando $finalStatus e 'cancelado'
+        // (plans/016): pix_charges.status nao tem 'cancelado' no enum
+        // (migrations/010) — o que foi cancelado e o PEDIDO, a cobranca PIX nao
+        // paga so fica expirada de qualquer forma.
         $chargesModel = new pix_charges_model();
         $chargesModel->update(
             [" status = 'expirado' ", " modified_at = ? "],

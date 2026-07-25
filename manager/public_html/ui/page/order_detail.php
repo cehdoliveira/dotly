@@ -305,5 +305,19 @@ $createdAbs = $absDate($order['created_at'] ?? null);
             </div>
         </div>
 
+        <?php if ($order['status'] === 'aguardando_pagamento' && !$isShipped): ?>
+            <!-- Cancelamento -->
+            <div class="content-panel">
+                <div class="content-panel-body">
+                    <form method="POST" action="<?php echo sprintf($GLOBALS['order_cancel_url'], (int)$order['idx']); ?>" class="mt-3" x-data="ordersController()" @submit.prevent="confirmCancel($event.target)">
+                        <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-x-circle me-1" aria-hidden="true"></i> Cancelar pedido
+                        </button>
+                    </form>
+                </div>
+            </div>
+        <?php endif; ?>
+
     </main>
 </div>

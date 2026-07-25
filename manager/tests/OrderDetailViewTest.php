@@ -36,6 +36,7 @@ final class OrderDetailViewTest extends TestCase
             'home_url' => '/', 'customers_url' => '/clientes', 'products_url' => '/produtos',
             'orders_url' => '/pedidos', 'order_url' => '/pedidos/%d',
             'order_ship_url' => '/pedidos/%d/enviar', 'order_label_url' => '/pedidos/%d/etiqueta',
+            'order_cancel_url' => '/pedidos/%d/cancelar',
         ];
         foreach ($urls as $key => $value) {
             $this->globalsBackup[$key] = $GLOBALS[$key] ?? null;
@@ -178,5 +179,25 @@ final class OrderDetailViewTest extends TestCase
         $this->assertStringNotContainsString('name="tracking_code"', $shipped, 'pedido enviado esconde o form');
         $this->assertStringContainsString('BR123456789', $shipped, 'código de rastreio exibido');
         $this->assertStringContainsString('Enviado', $shipped);
+    }
+
+    /**
+     * Achado do review de especialistas (/phpship, plans/016): o botão de
+     * cancelamento não tinha nenhum teste de view, diferente dos outros botões
+     * condicionais desta página (etiqueta, rastreio).
+     */
+    public function testShowsCancelButtonOnlyWhenAwaitingPaymentAndNotShipped(): void
+    {
+        $awaiting = $this->renderStrict($this->order(['status' => 'aguardando_pagamento']));
+        $this->assertStringContainsString('Cancelar pedido', $awaiting, 'pedido aguardando pagamento e não enviado deve oferecer o cancelamento');
+        $this->assertStringContainsString('/pedidos/42/cancelar', $awaiting, 'botão deve apontar para a rota de cancelamento');
+
+        $paid = $this->renderStrict($this->order(['status' => 'pago']));
+        $this->assertStringNotContainsString('Cancelar pedido', $paid, 'pedido pago não pode ser cancelado por aqui');
+
+        $shipped = $this->renderStrict($this->order([
+            'status' => 'aguardando_pagamento', 'shipped_at' => '2026-07-11 09:00:00', 'tracking_code' => 'BR123456789',
+        ]));
+        $this->assertStringNotContainsString('Cancelar pedido', $shipped, 'pedido já enviado não pode ser cancelado mesmo que o pagamento nunca tenha sido confirmado');
     }
 }

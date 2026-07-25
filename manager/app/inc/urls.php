@@ -14,5 +14,6 @@ $products_url = sprintf("%s%s", constant("cFrontend"), "produtos");
 $orders_url   = sprintf("%s%s", constant("cFrontend"), "pedidos");
 $order_url    = sprintf("%s%s/%s", constant("cFrontend"), "pedidos", "%d");
 $order_ship_url = sprintf("%s%s/%s/%s", constant("cFrontend"), "pedidos", "%d", "enviar");
+$order_cancel_url = sprintf("%s%s/%s/%s", constant("cFrontend"), "pedidos", "%d", "cancelar");
 $order_label_url = sprintf("%s%s/%s/%s", constant("cFrontend"), "pedidos", "%d", "etiqueta");
 $orders_export_url = sprintf("%s%s", constant("cFrontend"), "pedidos/exportar");

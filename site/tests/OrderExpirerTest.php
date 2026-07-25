@@ -407,12 +407,12 @@ final class OrderExpirerTest extends DBTestCase
 
         $expirer = new class extends OrderExpirer {
             public int $failOrderId = 0;
-            public function expireOne(int $ordersId, string $now): ?int
+            public function expireOne(int $ordersId, string $now, string $finalStatus = 'expirado'): ?int
             {
                 if ($ordersId === $this->failOrderId) {
                     throw new \RuntimeException('forced failure for test');
                 }
-                return parent::expireOne($ordersId, $now);
+                return parent::expireOne($ordersId, $now, $finalStatus);
             }
         };
         $expirer->failOrderId = $orderIdB;
@@ -426,5 +426,27 @@ final class OrderExpirerTest extends DBTestCase
         $this->assertSame('expirado', $this->loadOrder($orderIdA)['status'], 'pedido A deve permanecer expirado mesmo com falha no pedido B');
         $this->assertSame(102, $this->loadProductStock($productId), 'estoque do pedido A deve permanecer devolvido (nao sofre rollback pela falha do pedido B)');
         $this->assertSame('aguardando_pagamento', $this->loadOrder($orderIdB)['status'], 'pedido que falhou deve permanecer intocado para retry no proximo ciclo');
+    }
+
+    /**
+     * Achado do review de especialistas (/phpship, plans/016): a validacao de
+     * $finalStatus adicionada a expireOne() nunca era exercitada por nenhum
+     * teste — uma regressao que trocasse o guard por um `status = ?` sem
+     * checagem passaria despercebida.
+     */
+    public function testExpireOneRejectsInvalidFinalStatus(): void
+    {
+        $productId = $this->createProduct(stock: 10);
+        $orderId = $this->createOrder('aguardando_pagamento', date('Y-m-d H:i:s'));
+        $this->createOrderItem($orderId, $productId, 'unit', 2);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        try {
+            (new OrderExpirer())->expireOne($orderId, date('Y-m-d H:i:s'), 'invalido');
+        } finally {
+            $this->assertSame('aguardando_pagamento', $this->loadOrder($orderId)['status'], 'status nao pode mudar quando o valor e rejeitado');
+            $this->assertSame(10, $this->loadProductStock($productId), 'estoque nao pode ser tocado quando o valor e rejeitado');
+        }
     }
 }
