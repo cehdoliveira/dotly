@@ -407,12 +407,12 @@ final class OrderExpirerTest extends DBTestCase
 
         $expirer = new class extends OrderExpirer {
             public int $failOrderId = 0;
-            public function expireOne(int $ordersId, string $now): ?int
+            public function expireOne(int $ordersId, string $now, string $finalStatus = 'expirado'): ?int
             {
                 if ($ordersId === $this->failOrderId) {
                     throw new \RuntimeException('forced failure for test');
                 }
-                return parent::expireOne($ordersId, $now);
+                return parent::expireOne($ordersId, $now, $finalStatus);
             }
         };
         $expirer->failOrderId = $orderIdB;
