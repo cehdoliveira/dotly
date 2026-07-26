@@ -7,10 +7,17 @@
  * sempre, ja que o webhook e hoje o unico ator que transiciona
  * `aguardando_pagamento -> pago`.
  *
- * So cobre gateways com endpoint de consulta de status (mercadopago/pagbank).
- * InfinitePay fica de fora por design: `InfinitePayGateway::fetchStatus()`
- * sempre devolve 'pendente' (sem endpoint de consulta por charge id) — para
- * ele, o unico fallback e a expiracao por tempo (plano 032).
+ * Cobre gateways com endpoint de consulta de status por charge id
+ * (mercadopago/pagbank), via `$statusResolver`/`fetchStatus()`. InfinitePay nao
+ * tem esse endpoint (`InfinitePayGateway::fetchStatus()` sempre devolve
+ * 'pendente') mas, desde o plano 022, tem um caminho PARCIAL: se o comprador
+ * completou o retorno do checkout hospedado, `checkout_controller::done()`
+ * capturou `transaction_nsu` + `gateway_invoice_slug` — e com os dois em mãos
+ * `reconcileInfinitePayCaptured()` pode reconfirmar via POST /payment_check
+ * (`$nsuReconfirmResolver`/`InfinitePayGateway::confirmPayment()`). Cobranca
+ * InfinitePay sem esses dois campos capturados continua so na expiracao por
+ * tempo (plano 032) — o ponto cego residual e o comprador que fecha a aba
+ * antes de clicar "Continuar" na tela da InfinitePay.
  *
  * Extraida para app/inc/lib/ (mesmo padrao de OrderExpirer, plano 032) para
  * ser testavel — site/cgi-bin/reconcile_charges.php e so a casca do cron.
@@ -57,6 +64,16 @@ class OrderReconciler
     private const ELIGIBLE_SLUGS = ['mercadopago', 'pagbank'];
 
     /**
+     * InfinitePay nao tem endpoint de consulta por charge id (fetchStatus() sempre
+     * 'pendente'), mas TEM POST /payment_check — que exige transaction_nsu + slug
+     * da fatura. Desde plans/022 esses dois campos podem ter sido capturados do
+     * retorno do comprador em checkout_controller::done(). Cobranca InfinitePay com
+     * os dois preenchidos e reconciliavel; sem eles, continua so na expiracao por
+     * tempo (plano 032).
+     */
+    private const NSU_RECONFIRM_SLUGS = ['infinitepay'];
+
+    /**
      * Resolve o status de uma cobranca no PSP: (string $slug, string $gatewayChargeId): string.
      * Default: instancia o adapter real do slug e chama fetchStatus() (HTTP real).
      * Injetavel para teste (evita rede no PHPUnit) — mesmo espirito de
@@ -67,9 +84,25 @@ class OrderReconciler
      */
     private $statusResolver;
 
-    public function __construct(?callable $statusResolver = null)
+    /**
+     * Reconfirma uma cobranca a partir de um corpo JSON sintetizado:
+     * (string $rawBody): array{paid: bool, paid_amount_cents: ?int, transaction_nsu: ?string, retriable: bool}
+     * Default: InfinitePayGateway::confirmPayment() (HTTP real). Injetavel para teste,
+     * mesmo espirito do $statusResolver.
+     *
+     * @var callable(string): array{paid: bool, paid_amount_cents: ?int, transaction_nsu: ?string, retriable: bool}
+     */
+    private $nsuReconfirmResolver;
+
+    public function __construct(?callable $statusResolver = null, ?callable $nsuReconfirmResolver = null)
     {
         $this->statusResolver = $statusResolver ?? [$this, 'defaultStatusResolver'];
+        $this->nsuReconfirmResolver = $nsuReconfirmResolver ?? [$this, 'defaultNsuReconfirmResolver'];
+    }
+
+    private function defaultNsuReconfirmResolver(string $rawBody): array
+    {
+        return (new InfinitePayGateway())->confirmPayment($rawBody);
     }
 
     private function defaultStatusResolver(string $slug, string $gatewayChargeId): string
@@ -96,7 +129,7 @@ class OrderReconciler
      * no PSP. $now vem do PHP (America/Sao_Paulo), nunca de NOW() do MySQL —
      * mesmo motivo do skew de fuso ja conhecido no repo (ver OrderExpirer).
      *
-     * @return array{checked:int, confirmed:int, skipped:int, errored:int, alerted:int}
+     * @return array{checked:int, confirmed:int, skipped:int, errored:int, alerted:int, nsu_checked:int, nsu_confirmed:int}
      */
     public function reconcilePending(?string $now = null): array
     {
@@ -169,7 +202,96 @@ class OrderReconciler
 
         $summary['alerted'] = $this->alertRecentlyExpiredPaidCharges($now);
 
+        $nsuSummary = $this->reconcileInfinitePayCaptured($now);
+        $summary['nsu_checked'] = $nsuSummary['nsu_checked'];
+        $summary['nsu_confirmed'] = $nsuSummary['nsu_confirmed'];
+
         return $summary;
+    }
+
+    /**
+     * Segunda via de reconciliacao (plano 022): cobrancas InfinitePay cujo
+     * comprador completou o retorno do checkout hospedado (checkout_controller::
+     * done() capturou transaction_nsu + gateway_invoice_slug). Espelha a mesma
+     * estrutura de reconcilePending() (mesma janela, mesmo batch, mesmo
+     * try/catch por linha) — SELECT e resolvedor diferentes (payment_check em
+     * vez de fetchStatus(), sem endpoint de consulta por charge id).
+     *
+     * @return array{nsu_checked:int, nsu_confirmed:int}
+     */
+    private function reconcileInfinitePayCaptured(string $now): array
+    {
+        $pdo = localPDO::getInstance();
+        $windowStart = date('Y-m-d H:i:s', strtotime($now) - self::WINDOW_HOURS * 3600);
+
+        $model = new pix_charges_model();
+        $inPlaceholders = implode(',', array_fill(0, count(self::NSU_RECONFIRM_SLUGS), '?'));
+        $stmt = $model->select(
+            [
+                " pc.idx AS charge_idx ",
+                " pc.orders_id ",
+                " pc.gateway_charge_id ",
+                " pc.transaction_nsu ",
+                " pc.gateway_invoice_slug ",
+                " pc.amount_cents ",
+            ],
+            "WHERE pc.active = 'yes' AND pc.status = 'pendente'
+                AND o.active = 'yes' AND o.status = 'aguardando_pagamento'
+                AND pg.slug IN ($inPlaceholders)
+                AND pc.transaction_nsu IS NOT NULL AND pc.transaction_nsu <> ''
+                AND pc.gateway_invoice_slug IS NOT NULL AND pc.gateway_invoice_slug <> ''
+                AND o.created_at >= ?
+              ORDER BY pc.idx ASC
+              LIMIT " . self::BATCH_SIZE,
+            [...self::NSU_RECONFIRM_SLUGS, $windowStart],
+            "pc",
+            "JOIN payment_gateways pg ON pg.idx = pc.payment_gateways_id JOIN orders o ON o.idx = pc.orders_id"
+        );
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $nsuChecked = 0;
+        $nsuConfirmed = 0;
+
+        foreach ($rows as $row) {
+            $nsuChecked++;
+
+            try {
+                $rawBody = json_encode([
+                    'order_nsu'       => (string)$row['gateway_charge_id'],
+                    'transaction_nsu' => (string)$row['transaction_nsu'],
+                    'slug'            => (string)$row['gateway_invoice_slug'],
+                ], JSON_THROW_ON_ERROR);
+
+                $result = ($this->nsuReconfirmResolver)($rawBody);
+
+                if (!$result['paid']) {
+                    continue;
+                }
+
+                // Confirmacao de valor (espelha webhook_controller.php:184-192):
+                // sem ela, este caminho seria mais permissivo que o webhook para
+                // o mesmo gateway.
+                $paidCents = $result['paid_amount_cents'];
+                if ($paidCents === null || $paidCents < (int)$row['amount_cents']) {
+                    Logger::getInstance()->warning('OrderReconciler: InfinitePay payment_check pago com valor menor que a cobranca — nao confirma', [
+                        'charge_idx'        => (int)$row['charge_idx'],
+                        'paid_amount_cents' => $paidCents,
+                    ]);
+                    continue;
+                }
+
+                $confirmed = $this->confirmOne((int)$row['orders_id'], (int)$row['charge_idx'], $now);
+                if ($confirmed) {
+                    $nsuConfirmed++;
+                }
+            } catch (\Throwable $e) {
+                $pdo->rollback();
+                $pdo->beginTransaction();
+                error_log("OrderReconciler: falha ao reconciliar NSU capturado da cobranca {$row['charge_idx']} — " . $e->getMessage());
+            }
+        }
+
+        return ['nsu_checked' => $nsuChecked, 'nsu_confirmed' => $nsuConfirmed];
     }
 
     /**
