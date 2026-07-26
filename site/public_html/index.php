@@ -116,6 +116,21 @@ $dispatcher->add_route("GET",  "/acompanhar-pedido", "track_order_controller:ind
 $dispatcher->add_route("POST", "/acompanhar-pedido", "track_order_controller:search", null, $params);
 
 // Executar dispatcher e tratar falhas
+// Rota inexistente: 404 de verdade. Redirecionar pra home (comportamento anterior)
+// devolvia 302 + home para qualquer URL invalida — soft 404 que mantinha URL morta
+// indexada, escondia link quebrado e fazia o cliente achar que o link "funcionou".
+// Mesmo padrao de renderizacao da tela de vendas encerradas (acima): head + pagina + exit.
 if (!$dispatcher->exec()) {
-	basic_redir($home_url);
+	http_response_code(404);
+	Logger::getInstance()->info('404 no site', [
+		'path'   => $salesPath,
+		'method' => $_SERVER["REQUEST_METHOD"] ?? '',
+	]);
+	$noindex = true;
+	include(constant("cRootServer") . "ui/common/head.php");
+	include(constant("cRootServer") . "ui/common/header.php");
+	include(constant("cRootServer") . "ui/page/not_found.php");
+	include(constant("cRootServer") . "ui/common/footer.php");
+	include(constant("cRootServer") . "ui/common/foot.php");
+	exit;
 }
