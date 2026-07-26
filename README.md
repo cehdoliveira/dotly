@@ -53,6 +53,13 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
    ```bash
    docker exec app php /var/www/app/site/cgi-bin/run_migrations.php
    ```
+5.1. Rode o preflight e resolva o que aparecer:
+   ```bash
+   bash bin/doctor.sh
+   ```
+   Ele checa kernel, placeholders de segredo, extensões PHP, banco, migrations, fuso e
+   gateways habilitados. `[FALHA]` = a marca vai se comportar errado; `[AVISO]` =
+   degradação conhecida (ex.: sem `rdkafka`, e-mail de admin não é enviado).
 6. Commite (nova marca instanciada) e faça deploy.
 
 ### O que o script substitui automaticamente
@@ -144,6 +151,14 @@ bash bin/test.sh
 
 # Sync guard — verifica se lib/ e model/ são byte-idênticos entre site/ e manager/
 bash bin/check-shared-sync.sh
+
+# Preflight — diagnostica degradações fail-open antes de subir a marca
+# (kernel.php, placeholders de segredo, docker/.env, extensões PHP, banco,
+# fuso, migrations, gateways habilitados). Só leitura; não corrige nada.
+bash bin/doctor.sh
+bash bin/doctor.sh --skip-docker            # só checagens locais, sem container
+bash bin/doctor.sh --root <dir> --container <nome>
+# exit 0 sem falha; exit 2 com pelo menos uma [FALHA]; exit 1 = erro de uso
 
 # Instanciar nova marca (whitelabel)
 bin/init-whitelabel.sh \
