@@ -49,7 +49,7 @@ CONTAINER="app"
 SKIP_DOCKER=0
 
 show_help() {
-    sed -n '2,42p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -140,15 +140,14 @@ else
 fi
 
 # Placeholders de host do nginx. O entrypoint.sh substitui em runtime, mas
-# residuo no arquivo versionado indica marca ainda nao instanciada. So se
-# aplica quando as checagens de runtime nao foram explicitamente desligadas.
+# residuo no arquivo versionado indica marca ainda nao instanciada. E' uma
+# leitura de arquivo estatico (nao depende de container), entao roda mesmo
+# com --skip-docker.
 NGINX_CONF="$ROOT/docker/interface/default.conf"
-if [ "$SKIP_DOCKER" -ne 1 ]; then
-    if [ -f "$NGINX_CONF" ] && grep -q '__SITE_HOSTS__\|__MANAGER_HOSTS__' "$NGINX_CONF"; then
-        fail "docker/interface/default.conf ainda tem placeholders __SITE_HOSTS__/__MANAGER_HOSTS__ — marca nao instanciada (rode bin/init-whitelabel.sh)"
-    else
-        ok "docker/interface/default.conf sem placeholders de host residuais"
-    fi
+if [ -f "$NGINX_CONF" ] && grep -q '__SITE_HOSTS__\|__MANAGER_HOSTS__' "$NGINX_CONF"; then
+    fail "docker/interface/default.conf ainda tem placeholders __SITE_HOSTS__/__MANAGER_HOSTS__ — marca nao instanciada (rode bin/init-whitelabel.sh)"
+else
+    ok "docker/interface/default.conf sem placeholders de host residuais"
 fi
 
 # ALLOWED_HOSTS + CANONICAL_URL — canonical_url() e fail-closed: se os dois
@@ -175,11 +174,16 @@ if [ "$SITE_KERNEL_OK" -eq 1 ] && [ -f "$ENV_FILE" ]; then
     K_DB_USER="$(kernel_const "$SITE_KERNEL" DB_USER)"
     E_DB_NAME="$(grep -oP '^MYSQL_DATABASE=\K.*' "$ENV_FILE" 2>/dev/null | head -1)"
     E_DB_USER="$(grep -oP '^MYSQL_USER=\K.*' "$ENV_FILE" 2>/dev/null | head -1)"
+    DB_MISMATCH=0
     if [ -n "$K_DB_NAME" ] && [ -n "$E_DB_NAME" ] && [ "$K_DB_NAME" != "$E_DB_NAME" ]; then
         warn "DB_NAME do kernel do site difere de MYSQL_DATABASE do docker/.env — replique manualmente (README, passo 3)"
-    elif [ -n "$K_DB_USER" ] && [ -n "$E_DB_USER" ] && [ "$K_DB_USER" != "$E_DB_USER" ]; then
+        DB_MISMATCH=1
+    fi
+    if [ -n "$K_DB_USER" ] && [ -n "$E_DB_USER" ] && [ "$K_DB_USER" != "$E_DB_USER" ]; then
         warn "DB_USER do kernel do site difere de MYSQL_USER do docker/.env — replique manualmente (README, passo 3)"
-    else
+        DB_MISMATCH=1
+    fi
+    if [ "$DB_MISMATCH" -eq 0 ]; then
         ok "DB_NAME/DB_USER do kernel do site coerentes com docker/.env"
     fi
 fi
