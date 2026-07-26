@@ -149,7 +149,9 @@ docker exec app php /var/www/app/site/cgi-bin/run_migrations.php
 # Verificação completa pré-merge (PHPStan host + PHPUnit no container, ambos envs)
 bash bin/test.sh
 
-# Sync guard — verifica se lib/ e model/ são byte-idênticos entre site/ e manager/
+# Sync guard — verifica se lib/, model/ e os 4 arquivos compartilhados
+# (main.php, lists.php, run_migrations.php, kafka_email_worker.php) são
+# byte-idênticos entre site/ e manager/
 bash bin/check-shared-sync.sh
 
 # Preflight — diagnostica degradações fail-open antes de subir a marca
