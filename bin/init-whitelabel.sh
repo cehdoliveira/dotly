@@ -193,6 +193,7 @@ sed -i \
     -e "s#define(\"cTitle\", \"App\");#define(\"cTitle\", \"${E_BRAND_NAME}\");#" \
     -e "s#define(\"ALLOWED_HOSTS\", \"localhost\");#define(\"ALLOWED_HOSTS\", \"${E_MANAGER_HOSTS}\");#" \
     -e "s#define(\"MANAGER_CANONICAL_URL\", \"http://localhost\");#define(\"MANAGER_CANONICAL_URL\", \"${E_MANAGER_URL}\");#" \
+    -e "s#define(\"SITE_CANONICAL_URL\", \"http://localhost\");#define(\"SITE_CANONICAL_URL\", \"${E_SITE_URL}\");#" \
     -e "s#define(\"REDIS_PREFIX\", \"app:manager:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:manager:\");#" \
     -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"app_manager_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_manager_emails\");#" \
     -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"app-manager-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-manager-email-worker-group\");#" \
