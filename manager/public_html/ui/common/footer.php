@@ -18,11 +18,21 @@
                     </small>
                     <small>Mobile-first</small>
                     <small>v1.0</small>
-                    <small>
-                        <a href="<?php echo defined('SITE_URL') ? htmlspecialchars(constant('SITE_URL')) : '/'; ?>/termos-de-uso" target="_blank" rel="noopener">Termos de Uso</a>
-                        |
-                        <a href="<?php echo defined('SITE_URL') ? htmlspecialchars(constant('SITE_URL')) : '/'; ?>/politica-de-privacidade" target="_blank" rel="noopener">Política de Privacidade</a>
-                    </small>
+                    <?php
+                    // SITE_CANONICAL_URL e a URL publica do site (nao do painel).
+                    // Termos/Privacidade sao rotas do site — sem a URL configurada,
+                    // esconde os links em vez de emitir href quebrado (o fallback '/'
+                    // anterior gerava '//termos-de-uso', que o navegador le como o
+                    // host 'termos-de-uso').
+                    $_site_base = defined('SITE_CANONICAL_URL') ? rtrim((string) constant('SITE_CANONICAL_URL'), '/') : '';
+                    if ($_site_base !== ''):
+                    ?>
+                        <small>
+                            <a href="<?php echo htmlspecialchars($_site_base); ?>/termos-de-uso" target="_blank" rel="noopener">Termos de Uso</a>
+                            |
+                            <a href="<?php echo htmlspecialchars($_site_base); ?>/politica-de-privacidade" target="_blank" rel="noopener">Política de Privacidade</a>
+                        </small>
+                    <?php endif; ?>
                     <small><!-- WHITELABEL: preencha responsável e contato --><?php echo htmlspecialchars(constant('cTitle')); ?> | Contato: contato@example.com</small>
                 </div>
             </div>

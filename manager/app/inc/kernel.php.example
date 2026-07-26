@@ -102,6 +102,12 @@ define("UPLOAD_ALLOWED_TYPES", "jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx");
 // Exemplo produção: "https://manager.exemplo.com"
 define("MANAGER_CANONICAL_URL", "http://localhost");
 
+// URL publica do SITE (nao do painel). O manager precisa dela apenas para linkar
+// Termos de Uso / Politica de Privacidade no rodape — essas rotas existem so no
+// site. Vazio = os links somem do rodape (melhor do que apontar para o host
+// errado). Preenchida automaticamente por bin/init-whitelabel.sh --site-url.
+define("SITE_CANONICAL_URL", "http://localhost");
+
 // ===== SESSÃO =====
 // Timeout de INATIVIDADE em segundos, aplicado por app/inc/main.php: apos este
 // tempo sem nenhuma requisicao, a sessao e descartada (credencial do admin,
