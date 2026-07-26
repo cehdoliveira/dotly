@@ -268,6 +268,7 @@ class checkout_controller
         global $home_url;
 
         $order = $this->loadOrderByToken($info[1] ?? null, $home_url);
+        $this->captureGatewayReturnParams($order);
 
         $itemsModel = new order_items_model();
         $itemsModel->set_filter([" active = 'yes' ", " orders_id = ? "], [$order['idx']]);
@@ -528,6 +529,98 @@ class checkout_controller
         $chargeModel->load_data(false);
 
         return $chargeModel->data[0] ?? null;
+    }
+
+    /**
+     * Captura (sem confirmar pagamento) o `transaction_nsu`/`slug`/`order_nsu` que a
+     * InfinitePay manda como query param na URL de retorno do comprador (a nossa
+     * `redirect_url` configurada no checkout deles) — nunca pelo webhook. Doc publica
+     * (citada no plano 022/plans/018-RESULTADO.md): "A URL vai vir com alguns
+     * parametros importantes: ... order_nsu ..., slug - Codigo da fatura na
+     * InfinitePay ..., transaction_nsu - ID unico da transacao." Sem isto, o dado
+     * chegava ao nosso servidor e era jogado fora — e sem ele, uma cobranca
+     * InfinitePay cujo webhook nunca chega nao tem como ser reconfirmada
+     * (OrderReconciler::reconcileInfinitePayCaptured() precisa dos dois campos).
+     *
+     * NUNCA confirma pagamento aqui: esta rota e GET e nao passa por
+     * validate_csrf() — qualquer escrita de status/estoque neste metodo seria
+     * forjavel por link. So persiste os dois campos para o cron de reconciliacao
+     * usar depois.
+     *
+     * Commit explicito necessario: `done()` so renderiza e retorna, nunca chama
+     * basic_redir() (quem comita a transacao global por request). Sem o commit
+     * aqui, localPDO::__destruct() reverte esta escrita silenciosamente no fim do
+     * request (ver localPDO.php:53-58) e o recurso inteiro vira no-op.
+     *
+     * Fail-soft total (try/catch \Throwable): a UNIQUE de transaction_nsu pode
+     * estourar numa corrida legitima com o webhook gravando o mesmo NSU entre a
+     * leitura e a escrita — e nesse caso o dado que interessa ja esta no banco.
+     * Esta e a pagina de confirmacao do comprador: nunca pode quebrar por causa
+     * de uma captura oportunista.
+     *
+     * Publico (nao privado) apenas para ser testavel sem os includes de view de
+     * done() — mesmo motivo de findLatestActiveCharge() ser publico.
+     */
+    public function captureGatewayReturnParams(array $order): void
+    {
+        try {
+            $transactionNsu = trim((string)($_GET['transaction_nsu'] ?? ''));
+            $invoiceSlug    = trim((string)($_GET['slug'] ?? ''));
+            $orderNsu       = trim((string)($_GET['order_nsu'] ?? ''));
+
+            if ($transactionNsu === '' || $invoiceSlug === '') {
+                // Caso normal: MercadoPago/PagBank (que nao mandam esses params) ou
+                // acesso direto a URL sem ter passado pelo retorno da InfinitePay.
+                return;
+            }
+
+            $charge = $this->findLatestActiveCharge((int)$order['idx']);
+            if ($charge === null) {
+                return;
+            }
+
+            if ($orderNsu !== '' && $orderNsu !== (string)($charge['gateway_charge_id'] ?? '')) {
+                // Impede que alguem cole o NSU de uma transacao real na URL do
+                // pedido de outra pessoa (order_nsu nao bate com a cobranca deste
+                // pedido).
+                Logger::getInstance()->warning('checkout done(): order_nsu do retorno nao bate com gateway_charge_id da cobranca — captura recusada', [
+                    'orders_id'  => (int)$order['idx'],
+                    'charge_idx' => (int)$charge['idx'],
+                ]);
+                return;
+            }
+
+            if (!empty($charge['transaction_nsu'])) {
+                // Nunca sobrescreve — mesma regra que webhook_controller.php:214-220
+                // ja aplica para transaction_nsu.
+                return;
+            }
+
+            // Filtro dupla (idx + nao-sobrescrita) fecha a corrida com o webhook
+            // chegando no mesmo instante.
+            $update = new pix_charges_model();
+            $update->set_filter(
+                ["idx = ?", "(transaction_nsu IS NULL OR transaction_nsu = '')"],
+                [(int)$charge['idx']]
+            );
+            $update->populate([
+                'transaction_nsu'      => $transactionNsu,
+                'gateway_invoice_slug' => $invoiceSlug,
+            ]);
+            $update->save();
+
+            $pdo = localPDO::getInstance();
+            $pdo->commit();
+            $pdo->beginTransaction();
+        } catch (\Throwable $e) {
+            $pdo = localPDO::getInstance();
+            $pdo->rollback();
+            $pdo->beginTransaction();
+            Logger::getInstance()->warning('checkout done(): falha ao capturar transaction_nsu/slug do retorno da InfinitePay', [
+                'orders_id' => (int)($order['idx'] ?? 0),
+                'error'     => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
