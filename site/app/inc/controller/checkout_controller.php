@@ -560,6 +560,19 @@ class checkout_controller
      *
      * Publico (nao privado) apenas para ser testavel sem os includes de view de
      * done() — mesmo motivo de findLatestActiveCharge() ser publico.
+     *
+     * Duas checagens de posse (achado do review de especialistas do /phpship):
+     * (a) order_nsu e OBRIGATORIO e precisa bater com gateway_charge_id — a doc
+     * publica citada acima diz que a InfinitePay sempre manda esse parametro no
+     * retorno, entao exigi-lo nao quebra o caso legitimo; aceitar o parametro
+     * ausente como "sem checagem" permitiria colar o transaction_nsu de um
+     * pagamento pequeno proprio no retorno de um pedido de terceiro, sem
+     * order_nsu, e a defesa nunca disparar. (b) findLatestActiveCharge() nao
+     * filtra por gateway (uso generico em outros pontos, ver
+     * CheckoutPaymentChargeTest) — sem checar que a cobranca e InfinitePay,
+     * dado de query string nao autenticado poderia ser gravado numa cobranca
+     * MercadoPago/PagBank, poluindo transaction_nsu e bloqueando (regra de
+     * nao-sobrescrita) a captura legitima futura do NSU de disputa do PagBank.
      */
     public function captureGatewayReturnParams(array $order): void
     {
@@ -579,11 +592,26 @@ class checkout_controller
                 return;
             }
 
-            if ($orderNsu !== '' && $orderNsu !== (string)($charge['gateway_charge_id'] ?? '')) {
+            $infinitePayGatewayModel = new payment_gateways_model();
+            $infinitePayGatewayModel->set_filter([" active = 'yes' ", " slug = ? "], ['infinitepay']);
+            $infinitePayGatewayModel->set_paginate([1]);
+            $infinitePayGatewayModel->load_data(false);
+            $infinitePayGatewayId = $infinitePayGatewayModel->data[0]['idx'] ?? null;
+
+            if ($infinitePayGatewayId === null || (int)$charge['payment_gateways_id'] !== (int)$infinitePayGatewayId) {
+                // A cobranca ativa mais recente do pedido pode ser de outro
+                // gateway (MercadoPago/PagBank) se o comprador trocou de
+                // gateway ou acessa done() sem ter passado pelo checkout
+                // hospedado da InfinitePay.
+                return;
+            }
+
+            if ($orderNsu === '' || $orderNsu !== (string)($charge['gateway_charge_id'] ?? '')) {
                 // Impede que alguem cole o NSU de uma transacao real na URL do
-                // pedido de outra pessoa (order_nsu nao bate com a cobranca deste
-                // pedido).
-                Logger::getInstance()->warning('checkout done(): order_nsu do retorno nao bate com gateway_charge_id da cobranca — captura recusada', [
+                // pedido de outra pessoa. order_nsu e OBRIGATORIO aqui — sem
+                // essa exigencia, omitir o parametro pularia a checagem por
+                // completo (achado do review de especialistas do /phpship).
+                Logger::getInstance()->warning('checkout done(): order_nsu do retorno ausente ou nao bate com gateway_charge_id da cobranca — captura recusada', [
                     'orders_id'  => (int)$order['idx'],
                     'charge_idx' => (int)$charge['idx'],
                 ]);

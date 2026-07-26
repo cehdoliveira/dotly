@@ -250,4 +250,107 @@ final class CheckoutDoneNsuCaptureTest extends DBTestCase
         $this->assertSame('aguardando_pagamento', $order4After['status']);
         $this->assertNull($order4After['paid_at']);
     }
+
+    /**
+     * Achado do review de especialistas do /phpship (P0): order_nsu OMITIDO
+     * (nao apenas divergente) tambem precisa ser rejeitado. Antes da correcao,
+     * `$orderNsu !== '' && ...` pulava a checagem inteira quando o parametro
+     * vinha ausente/vazio — quem montasse o link sem order_nsu passava direto,
+     * mesmo com um transaction_nsu que nao e da cobranca deste pedido.
+     */
+    public function testMissingOrderNsuIsRejected(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+        $orderId = $this->createOrder();
+        $chargeId = $this->createChargeWithNsu($orderId, $gatewayId);
+
+        $_GET = [
+            'transaction_nsu' => 'nsu-' . uniqid(),
+            'slug'            => 'slug-' . uniqid(),
+            // order_nsu deliberadamente ausente.
+        ];
+
+        $controller = new checkout_controller();
+        $controller->captureGatewayReturnParams(['idx' => $orderId]);
+
+        $chargeAfter = $this->loadCharge($chargeId);
+        $this->assertNull($chargeAfter['transaction_nsu'], 'sem order_nsu, a captura deveria ser recusada (mesma protecao do order_nsu divergente)');
+    }
+
+    /**
+     * Achado do review de especialistas do /phpship (P2): findLatestActiveCharge()
+     * nao filtra por gateway — sem a checagem extra, dado de query string nao
+     * autenticado poderia ser gravado numa cobranca MercadoPago/PagBank em vez
+     * de InfinitePay, poluindo transaction_nsu e bloqueando (regra de
+     * nao-sobrescrita) a captura legitima futura do NSU real daquele gateway.
+     */
+    public function testChargeFromOtherGatewayIsNotCaptured(): void
+    {
+        $mercadoPagoGatewayId = $this->gatewayIdBySlug('mercadopago');
+        $orderId = $this->createOrder();
+        $chargeId = $this->createChargeWithNsu($orderId, $mercadoPagoGatewayId);
+        $charge = $this->loadCharge($chargeId);
+
+        $_GET = [
+            'transaction_nsu' => 'nsu-' . uniqid(),
+            'slug'            => 'slug-' . uniqid(),
+            'order_nsu'       => $charge['gateway_charge_id'],
+        ];
+
+        $controller = new checkout_controller();
+        $controller->captureGatewayReturnParams(['idx' => $orderId]);
+
+        $chargeAfter = $this->loadCharge($chargeId);
+        $this->assertNull($chargeAfter['transaction_nsu'], 'cobranca de outro gateway (mercadopago) nao deveria receber a captura de retorno da InfinitePay');
+    }
+
+    /**
+     * Cobre o catch(\Throwable) de captureGatewayReturnParams() (achado do
+     * review de especialistas do /phpship: nenhum teste forcava a excecao
+     * real). Forca a UNIQUE de transaction_nsu (migrations/010) estourar —
+     * mesma corrida legitima que o metodo documenta (webhook grava o mesmo
+     * NSU entre a leitura e a escrita) — e prova que o metodo nao propaga a
+     * excecao e que o rollback+beginTransaction deixa o dado alvo intacto.
+     */
+    public function testUniqueViolationOnTransactionNsuIsAbsorbedFailSoft(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+
+        // Cobranca de OUTRO pedido que ja "ganhou a corrida" com o mesmo NSU
+        // (simula o webhook gravando primeiro).
+        $conflictingNsu = 'nsu-conflito-' . uniqid();
+        $otherOrderId = $this->createOrder();
+        $this->createChargeWithNsu($otherOrderId, $gatewayId, $conflictingNsu);
+
+        // Cobranca alvo deste teste, ainda sem transaction_nsu.
+        $orderId = $this->createOrder();
+        $chargeId = $this->createChargeWithNsu($orderId, $gatewayId);
+        $charge = $this->loadCharge($chargeId);
+
+        // Fixtures commitadas de proposito: o catch(\Throwable) do metodo
+        // sob teste faz rollback()+beginTransaction() na conexao singleton
+        // (localPDO::getInstance()), a MESMA usada pelos models desta
+        // fixture (ver docblock de DBTestCase). Sem commit aqui, a violacao
+        // forcada abaixo reverteria as fixtures junto com a escrita falha —
+        // mesmo padrao ja usado em CheckoutChargeCompensationTest.
+        localPDO::getInstance()->commit();
+        localPDO::getInstance()->beginTransaction();
+
+        $_GET = [
+            'transaction_nsu' => $conflictingNsu, // mesmo valor -> UNIQUE estoura no save()
+            'slug'            => 'slug-' . uniqid(),
+            'order_nsu'       => $charge['gateway_charge_id'],
+        ];
+
+        $controller = new checkout_controller();
+        // Nao deve lancar — o catch(\Throwable) precisa absorver a excecao.
+        $controller->captureGatewayReturnParams(['idx' => $orderId]);
+
+        $chargeAfter = $this->loadCharge($chargeId);
+        $this->assertNull($chargeAfter['transaction_nsu'], 'save() falhou por violar a UNIQUE — a cobranca alvo nao deveria ter sido alterada');
+        $this->assertNull($chargeAfter['gateway_invoice_slug']);
+
+        $orderAfter = $this->loadOrder($orderId);
+        $this->assertSame('aguardando_pagamento', $orderAfter['status'], 'falha na captura nao pode afetar o status do pedido (fail-soft total)');
+    }
 }
