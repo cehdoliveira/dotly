@@ -701,4 +701,67 @@ final class OrderReconcilerTest extends DBTestCase
         $charge = $this->loadCharge($chargeId);
         $this->assertSame('pago', $charge['status']);
     }
+
+    /**
+     * Cobre o catch(\Throwable) de reconcileInfinitePayCaptured() (achado do
+     * review de especialistas do /phpship: nenhum teste forcava a excecao real
+     * nesse caminho). Mesma tecnica de
+     * testOneFailingChargeDoesNotRollbackPreviouslyCommittedChargesInBatch
+     * (subclasse anonima sobrescrevendo confirmOne() para forcar falha em uma
+     * cobranca do lote) — prova que o rollback()+beginTransaction() do catch
+     * nao desfaz o commit ja feito para a cobranca anterior do mesmo lote.
+     */
+    public function testInfinitePayOneFailingChargeDoesNotRollbackPreviouslyCommittedChargesInBatch(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+        $now = date('Y-m-d H:i:s');
+
+        $orderIdA = $this->createOrder('aguardando_pagamento', $now);
+        $chargeIdA = $this->createPendingChargeWithNsu($orderIdA, $gatewayId, 'nsu-' . uniqid(), 'slug-' . uniqid(), 5000);
+        $targetChargeIdA = $this->loadCharge($chargeIdA)['gateway_charge_id'];
+
+        $orderIdB = $this->createOrder('aguardando_pagamento', $now);
+        $chargeIdB = $this->createPendingChargeWithNsu($orderIdB, $gatewayId, 'nsu-' . uniqid(), 'slug-' . uniqid(), 5000);
+        $targetChargeIdB = $this->loadCharge($chargeIdB)['gateway_charge_id'];
+
+        // Resolvedor condicional aos 2 alvos deste teste (mesmo motivo dos
+        // outros testes: nao confirmar cobrancas vazadas de outros testes).
+        $reconciler = new class(
+            fn (string $slug, string $gatewayChargeId): string => 'pendente',
+            function (string $rawBody) use ($targetChargeIdA, $targetChargeIdB): array {
+                $payload = json_decode($rawBody, true);
+                $orderNsu = $payload['order_nsu'] ?? null;
+                if (!in_array($orderNsu, [$targetChargeIdA, $targetChargeIdB], true)) {
+                    return ['paid' => false, 'paid_amount_cents' => null, 'transaction_nsu' => null, 'retriable' => false];
+                }
+                return ['paid' => true, 'paid_amount_cents' => 5000, 'transaction_nsu' => $payload['transaction_nsu'], 'retriable' => false];
+            }
+        ) extends OrderReconciler {
+            public int $failOrdersId = 0;
+
+            public function confirmOne(int $ordersId, int $chargeIdx, string $now): bool
+            {
+                if ($ordersId === $this->failOrdersId) {
+                    throw new \RuntimeException('forced failure for test (caminho NSU capturado)');
+                }
+                return parent::confirmOne($ordersId, $chargeIdx, $now);
+            }
+        };
+        $reconciler->failOrdersId = $orderIdB;
+
+        $summary = $reconciler->reconcilePending($now);
+
+        $this->assertGreaterThanOrEqual(2, $summary['nsu_checked'], 'ambas cobrancas do lote deveriam ser verificadas (lote pode ter outras cobrancas vazadas de outros testes)');
+        $this->assertSame(1, $summary['nsu_confirmed'], 'so a cobranca A deveria ser confirmada — falha forcada na B nao derruba o lote');
+
+        $orderA = $this->loadOrder($orderIdA);
+        $this->assertSame('pago', $orderA['status'], 'pedido A deve permanecer pago mesmo com falha forcada no pedido B (rollback+beginTransaction do catch nao desfaz commit anterior)');
+        $chargeA = $this->loadCharge($chargeIdA);
+        $this->assertSame('pago', $chargeA['status']);
+
+        $orderB = $this->loadOrder($orderIdB);
+        $this->assertSame('aguardando_pagamento', $orderB['status'], 'pedido B (falha forcada em confirmOne) nao deve ficar em estado inconsistente');
+        $chargeB = $this->loadCharge($chargeIdB);
+        $this->assertSame('pendente', $chargeB['status']);
+    }
 }
