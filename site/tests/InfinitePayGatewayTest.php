@@ -210,6 +210,36 @@ final class InfinitePayGatewayTest extends TestCase
         $this->assertNull($body);
     }
 
+    /**
+     * Teste de contrato (plano 022): OrderReconciler::reconcileInfinitePayCaptured()
+     * sintetiza um JSON com exatamente estas 3 chaves (order_nsu, transaction_nsu,
+     * slug) a partir de gateway_charge_id/transaction_nsu/gateway_invoice_slug
+     * capturados em checkout_controller::done(), e passa para confirmPayment()
+     * (que decodifica e chama buildPaymentCheckBody() internamente). Este teste e
+     * a cola entre os dois lados — se alguem renomear um campo em qualquer ponta,
+     * ele falha alto em vez de a captura parar de funcionar em silencio.
+     */
+    public function testSynthesizedReconcilerJsonIsAcceptedByBuildPaymentCheckBody(): void
+    {
+        $gateway = new InfinitePayGateway();
+
+        $rawBody = json_encode([
+            'order_nsu'       => 'chg-abc',
+            'transaction_nsu' => 'uuid-999',
+            'slug'            => 'invoice-slug-9',
+        ], JSON_THROW_ON_ERROR);
+
+        $payload = json_decode($rawBody, true);
+        $this->assertIsArray($payload);
+
+        $body = $gateway->buildPaymentCheckBody($payload);
+
+        $this->assertNotNull($body, 'JSON sintetizado pelo OrderReconciler deveria ser aceito por buildPaymentCheckBody()');
+        $this->assertSame('chg-abc', $body['order_nsu']);
+        $this->assertSame('uuid-999', $body['transaction_nsu']);
+        $this->assertSame('invoice-slug-9', $body['slug']);
+    }
+
     public function testParsePaymentCheckResponsePaidTrue(): void
     {
         $gateway = new InfinitePayGateway();

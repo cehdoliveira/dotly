@@ -88,6 +88,32 @@ final class OrderReconcilerTest extends DBTestCase
         return $id;
     }
 
+    /**
+     * Cobranca com transaction_nsu + gateway_invoice_slug ja preenchidos —
+     * simula o que checkout_controller::done() teria capturado do retorno do
+     * comprador (plano 022). gateway_invoice_slug nao esta no $field padrao de
+     * pix_charges_model (SELECT de load_data()), mas populate()/save() gravam
+     * por schema (DB), independente de $field.
+     */
+    private function createPendingChargeWithNsu(int $ordersId, int $gatewayId, string $transactionNsu, string $invoiceSlug, int $amountCents = 5000): int
+    {
+        $charge = new pix_charges_model();
+        $charge->populate([
+            'orders_id'            => $ordersId,
+            'payment_gateways_id'  => $gatewayId,
+            'gateway_charge_id'    => 'chg-' . uniqid(),
+            'status'               => 'pendente',
+            'amount_cents'         => $amountCents,
+            'expires_at'           => date('Y-m-d H:i:s', strtotime('+30 minutes')),
+            'transaction_nsu'      => $transactionNsu,
+            'gateway_invoice_slug' => $invoiceSlug,
+        ]);
+        $id = $charge->save();
+        $this->assertIsInt($id);
+
+        return $id;
+    }
+
     private function loadOrder(int $idx): array
     {
         $model = new orders_model();
@@ -492,5 +518,187 @@ final class OrderReconcilerTest extends DBTestCase
 
         $chargeAfter = $this->loadCharge($chargeId);
         $this->assertSame('expirado', $chargeAfter['status']);
+    }
+
+    /**
+     * Cobre reconcileInfinitePayCaptured() (plano 022): cobranca InfinitePay
+     * cujo comprador completou o retorno do checkout hospedado (transaction_nsu
+     * + gateway_invoice_slug capturados por checkout_controller::done()) e
+     * reconfirmada via o resolvedor de NSU (payment_check sintetizado),
+     * reusando confirmOne() para a escrita — mesmas colunas/guardas do
+     * caminho mercadopago/pagbank.
+     */
+    public function testInfinitePayWithCapturedNsuIsConfirmed(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+        $now = date('Y-m-d H:i:s');
+        $orderId = $this->createOrder('aguardando_pagamento', $now);
+        $transactionNsu = 'nsu-' . uniqid();
+        $invoiceSlug = 'slug-' . uniqid();
+        $chargeId = $this->createPendingChargeWithNsu($orderId, $gatewayId, $transactionNsu, $invoiceSlug, 5000);
+        $targetChargeId = $this->loadCharge($chargeId)['gateway_charge_id'];
+
+        // Resolvedor condicional ao alvo (mesmo motivo do resto do arquivo):
+        // decodifica o rawBody sintetizado e so confirma 'pago' se o
+        // order_nsu bater com a cobranca deste teste.
+        $reconciler = new OrderReconciler(
+            fn (string $slug, string $gatewayChargeId): string => 'pendente',
+            function (string $rawBody) use ($targetChargeId): array {
+                $payload = json_decode($rawBody, true);
+                if (($payload['order_nsu'] ?? null) !== $targetChargeId) {
+                    return ['paid' => false, 'paid_amount_cents' => null, 'transaction_nsu' => null, 'retriable' => false];
+                }
+                return ['paid' => true, 'paid_amount_cents' => 5000, 'transaction_nsu' => $payload['transaction_nsu'], 'retriable' => false];
+            }
+        );
+        $summary = $reconciler->reconcilePending($now);
+
+        $this->assertGreaterThanOrEqual(1, $summary['nsu_checked']);
+        $this->assertSame(1, $summary['nsu_confirmed'], 'so o alvo deste teste deveria ser confirmado (resolvedor condicional)');
+
+        $order = $this->loadOrder($orderId);
+        $this->assertSame('pago', $order['status']);
+        $this->assertNotNull($order['paid_at']);
+
+        $charge = $this->loadCharge($chargeId);
+        $this->assertSame('pago', $charge['status']);
+    }
+
+    /**
+     * Sem transaction_nsu/gateway_invoice_slug capturados, a cobranca
+     * InfinitePay nao entra no lote do resolvedor de NSU — o SELECT de
+     * reconcileInfinitePayCaptured() exige os dois preenchidos.
+     */
+    public function testInfinitePayWithoutCapturedNsuIsNotSelected(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+        $now = date('Y-m-d H:i:s');
+        $orderId = $this->createOrder('aguardando_pagamento', $now);
+        $chargeId = $this->createPendingCharge($orderId, $gatewayId);
+        $targetChargeId = $this->loadCharge($chargeId)['gateway_charge_id'];
+
+        $calledWithOurCharge = false;
+        $reconciler = new OrderReconciler(
+            fn (string $slug, string $gatewayChargeId): string => 'pendente',
+            function (string $rawBody) use ($targetChargeId, &$calledWithOurCharge): array {
+                $payload = json_decode($rawBody, true);
+                if (($payload['order_nsu'] ?? null) === $targetChargeId) {
+                    $calledWithOurCharge = true;
+                }
+                return ['paid' => false, 'paid_amount_cents' => null, 'transaction_nsu' => null, 'retriable' => false];
+            }
+        );
+        $reconciler->reconcilePending($now);
+
+        $this->assertFalse($calledWithOurCharge, 'cobranca sem transaction_nsu/gateway_invoice_slug capturados nao deveria ser passada ao resolvedor de NSU');
+
+        $order = $this->loadOrder($orderId);
+        $this->assertSame('aguardando_pagamento', $order['status']);
+    }
+
+    /**
+     * Confirmacao de valor (espelha webhook_controller.php:184-192): paid=true
+     * com paid_amount_cents abaixo do amount_cents da cobranca nao confirma —
+     * sem essa checagem, este caminho seria mais permissivo que o webhook
+     * para o mesmo gateway.
+     */
+    public function testInfinitePayPaidWithLowerAmountDoesNotConfirm(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+        $now = date('Y-m-d H:i:s');
+        $orderId = $this->createOrder('aguardando_pagamento', $now);
+        $transactionNsu = 'nsu-' . uniqid();
+        $invoiceSlug = 'slug-' . uniqid();
+        $chargeId = $this->createPendingChargeWithNsu($orderId, $gatewayId, $transactionNsu, $invoiceSlug, 5000);
+        $targetChargeId = $this->loadCharge($chargeId)['gateway_charge_id'];
+
+        $reconciler = new OrderReconciler(
+            fn (string $slug, string $gatewayChargeId): string => 'pendente',
+            function (string $rawBody) use ($targetChargeId): array {
+                $payload = json_decode($rawBody, true);
+                if (($payload['order_nsu'] ?? null) !== $targetChargeId) {
+                    return ['paid' => false, 'paid_amount_cents' => null, 'transaction_nsu' => null, 'retriable' => false];
+                }
+                // Valor pago menor que amount_cents (5000) da cobranca.
+                return ['paid' => true, 'paid_amount_cents' => 4999, 'transaction_nsu' => $payload['transaction_nsu'], 'retriable' => false];
+            }
+        );
+        $summary = $reconciler->reconcilePending($now);
+
+        $this->assertSame(0, $summary['nsu_confirmed']);
+
+        $order = $this->loadOrder($orderId);
+        $this->assertSame('aguardando_pagamento', $order['status']);
+
+        $charge = $this->loadCharge($chargeId);
+        $this->assertSame('pendente', $charge['status']);
+    }
+
+    public function testInfinitePayNotPaidDoesNotConfirm(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('infinitepay');
+        $now = date('Y-m-d H:i:s');
+        $orderId = $this->createOrder('aguardando_pagamento', $now);
+        $transactionNsu = 'nsu-' . uniqid();
+        $invoiceSlug = 'slug-' . uniqid();
+        $chargeId = $this->createPendingChargeWithNsu($orderId, $gatewayId, $transactionNsu, $invoiceSlug, 5000);
+
+        $reconciler = new OrderReconciler(
+            fn (string $slug, string $gatewayChargeId): string => 'pendente',
+            fn (string $rawBody): array => ['paid' => false, 'paid_amount_cents' => null, 'transaction_nsu' => null, 'retriable' => false]
+        );
+        $reconciler->reconcilePending($now);
+
+        $order = $this->loadOrder($orderId);
+        $this->assertSame('aguardando_pagamento', $order['status']);
+
+        $charge = $this->loadCharge($chargeId);
+        $this->assertSame('pendente', $charge['status']);
+    }
+
+    /**
+     * Regressao (plano 022): uma cobranca mercadopago com transaction_nsu
+     * preenchido continua tratada pelo caminho ANTIGO (statusResolver), nunca
+     * pelo novo resolvedor de NSU — protege contra o SELECT de
+     * reconcileInfinitePayCaptured() capturar linha alheia por engano
+     * (NSU_RECONFIRM_SLUGS = ['infinitepay'] apenas).
+     */
+    public function testMercadoPagoWithTransactionNsuStillUsesOldStatusResolverPath(): void
+    {
+        $gatewayId = $this->gatewayIdBySlug('mercadopago');
+        $now = date('Y-m-d H:i:s');
+        $orderId = $this->createOrder('aguardando_pagamento', $now);
+        $chargeId = $this->createPendingChargeWithNsu($orderId, $gatewayId, 'nsu-' . uniqid(), 'slug-' . uniqid(), 5000);
+        $targetChargeId = $this->loadCharge($chargeId)['gateway_charge_id'];
+
+        // Contador CONDICIONAL ao alvo deste teste (mesmo motivo do resto do
+        // arquivo): uma cobranca infinitepay com NSU capturado, deixada
+        // 'pendente' por outro teste deste MESMO processo PHPUnit, pode
+        // legitimamente vazar para o SELECT de reconcileInfinitePayCaptured()
+        // e chamar este resolvedor — o que importa provar aqui e que ele
+        // NUNCA e chamado para o gateway_charge_id da cobranca mercadopago
+        // deste teste especifico.
+        $nsuResolverCalledForOurCharge = false;
+        $reconciler = new OrderReconciler(
+            fn (string $slug, string $gatewayChargeId): string =>
+                $gatewayChargeId === $targetChargeId ? 'pago' : 'pendente',
+            function (string $rawBody) use ($targetChargeId, &$nsuResolverCalledForOurCharge): array {
+                $payload = json_decode($rawBody, true);
+                if (($payload['order_nsu'] ?? null) === $targetChargeId) {
+                    $nsuResolverCalledForOurCharge = true;
+                }
+                return ['paid' => false, 'paid_amount_cents' => null, 'transaction_nsu' => null, 'retriable' => false];
+            }
+        );
+        $summary = $reconciler->reconcilePending($now);
+
+        $this->assertSame(1, $summary['confirmed'], 'cobranca mercadopago deveria confirmar pelo caminho antigo (statusResolver)');
+        $this->assertFalse($nsuResolverCalledForOurCharge, 'o resolvedor de NSU nao deveria ser chamado para a cobranca mercadopago deste teste (NSU_RECONFIRM_SLUGS = infinitepay apenas)');
+
+        $order = $this->loadOrder($orderId);
+        $this->assertSame('pago', $order['status']);
+
+        $charge = $this->loadCharge($chargeId);
+        $this->assertSame('pago', $charge['status']);
     }
 }
