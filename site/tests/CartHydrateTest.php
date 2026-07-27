@@ -131,4 +131,14 @@ final class CartHydrateTest extends DBTestCase
 
         $this->assertSame($categoryName, $lines[0]['category']);
     }
+
+    public function testCartLineFallsBackToGeralWithoutCategoryLink(): void
+    {
+        $productId = $this->createProduct();
+
+        Cart::add($productId, 'unit', 1);
+        [$lines, ] = Cart::hydrate();
+
+        $this->assertSame('Geral', $lines[0]['category']);
+    }
 }
