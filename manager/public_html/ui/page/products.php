@@ -6,6 +6,7 @@ $csrfToken  = htmlspecialchars($_SESSION['_csrf_token'] ?? '', ENT_QUOTES, 'UTF-
 $currentQ          = $currentQ ?? '';
 $currentCategory   = $currentCategory ?? '';
 $categories        = $categories ?? [];
+$allCategories     = $allCategories ?? [];
 $currentStock      = $currentStock ?? '';
 $lowStockThreshold = (int)$lowStockThreshold;
 
@@ -151,7 +152,7 @@ $filterParams = array_filter([
                                     $coverPath  = $p['cover_path'] ?? null;
                                     $jsName     = htmlspecialchars(json_encode($p['name'] ?? ''), ENT_QUOTES, 'UTF-8');
                                     $jsSlug     = htmlspecialchars(json_encode($p['slug'] ?? ''), ENT_QUOTES, 'UTF-8');
-                                    $jsCategory = htmlspecialchars(json_encode($p['category'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                    $jsCategoryId = (int)($p['categories_id'] ?? 0);
                                     $jsPriceUnit = htmlspecialchars(json_encode(number_format((int)($p['price_unit_cents'] ?? 0) / 100, 2, ',', '.')), ENT_QUOTES, 'UTF-8');
                                     $jsDosage   = htmlspecialchars(json_encode($p['dosage'] ?? ''), ENT_QUOTES, 'UTF-8');
                                     $jsStock    = (int)($p['stock'] ?? 0);
@@ -194,7 +195,7 @@ $filterParams = array_filter([
                                             <div class="d-flex gap-1">
                                                 <!-- Editar -->
                                                 <button type="button" class="btn btn-sm btn-action-edit"
-                                                    @click="openEdit(<?php echo $productIdx; ?>, <?php echo $jsName; ?>, <?php echo $jsSlug; ?>, <?php echo $jsCategory; ?>, <?php echo $jsDosage; ?>, <?php echo $jsPriceUnit; ?>, <?php echo $jsStock; ?>)"
+                                                    @click="openEdit(<?php echo $productIdx; ?>, <?php echo $jsName; ?>, <?php echo $jsSlug; ?>, <?php echo $jsCategoryId; ?>, <?php echo $jsDosage; ?>, <?php echo $jsPriceUnit; ?>, <?php echo $jsStock; ?>)"
                                                     title="Editar produto">
                                                     <i class="bi bi-pencil" aria-hidden="true"></i> Editar
                                                 </button>
@@ -270,7 +271,14 @@ $filterParams = array_filter([
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
-                                <input type="text" name="category" class="form-control" required autocomplete="off">
+                                <select name="categories_id" class="form-select" required>
+                                    <option value="">Selecione uma categoria</option>
+                                    <?php foreach ($allCategories as $cat): ?>
+                                        <option value="<?php echo (int)$cat['idx']; ?>">
+                                            <?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Dosagem (mg)</label>
@@ -327,7 +335,14 @@ $filterParams = array_filter([
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
-                                <input type="text" name="category" class="form-control" x-model="editData.category" required autocomplete="off">
+                                <select name="categories_id" class="form-select" x-model="editData.categoriesId" required>
+                                    <option value="">Selecione uma categoria</option>
+                                    <?php foreach ($allCategories as $cat): ?>
+                                        <option value="<?php echo (int)$cat['idx']; ?>">
+                                            <?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Dosagem (mg)</label>

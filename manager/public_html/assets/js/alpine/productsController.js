@@ -1,7 +1,7 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('productsController', () => ({
         editData: {
-            idx: 0, name: '', slug: '', category: '', dosage: '',
+            idx: 0, name: '', slug: '', categoriesId: 0, dosage: '',
             priceUnit: '', stock: 0,
         },
         _editModal: null,
@@ -16,9 +16,9 @@ document.addEventListener('alpine:init', () => {
             this._createModal.show();
         },
 
-        openEdit(idx, name, slug, category, dosage, priceUnit, stock) {
+        openEdit(idx, name, slug, categoriesId, dosage, priceUnit, stock) {
             this.editData = {
-                idx: idx, name: name, slug: slug, category: category, dosage: dosage,
+                idx: idx, name: name, slug: slug, categoriesId: categoriesId, dosage: dosage,
                 priceUnit: priceUnit, stock: stock,
             };
             this._editModal.show();
