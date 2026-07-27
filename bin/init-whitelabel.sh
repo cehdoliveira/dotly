@@ -174,6 +174,22 @@ E_MANAGER_URL="$(escape_repl "$MANAGER_URL")"
 E_SITE_HOSTS="$(escape_repl "$SITE_HOSTS")"
 E_MANAGER_HOSTS="$(escape_repl "$MANAGER_HOSTS")"
 
+# ===== APP_ENCRYPTION_KEY: gerada uma vez e escrita IDENTICA nos dois kernels =====
+# As credenciais dos gateways sao cifradas com ela no manager e decifradas no
+# site; valores diferentes = site nao cobra. Segredo GERADO, nao inventado: e
+# uma chave aleatoria, nao uma senha de servico de terceiro (DB_PASS/
+# mail_from_pwd seguem como placeholder, por politica do script). Nunca
+# impressa no output — so o fato de ter sido gerada.
+APP_KEY="$(php -r 'echo base64_encode(random_bytes(32));' 2>/dev/null)"
+if [ -z "$APP_KEY" ]; then
+    APP_KEY="$(openssl rand -base64 32)"
+fi
+if [ -z "$APP_KEY" ]; then
+    echo "ERRO: nao foi possivel gerar APP_ENCRYPTION_KEY (nem php nem openssl disponiveis)." >&2
+    exit 1
+fi
+E_APP_KEY="$(escape_repl "$APP_KEY")"
+
 cp "$SITE_EXAMPLE" "$SITE_KERNEL"
 sed -i \
     -e "s#define(\"mail_from_name\", \"App\");#define(\"mail_from_name\", \"${E_BRAND_NAME}\");#" \
@@ -184,6 +200,7 @@ sed -i \
     -e "s#define(\"REDIS_PREFIX\", \"app:site:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:site:\");#" \
     -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"app_site_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_site_emails\");#" \
     -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"app-site-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-site-email-worker-group\");#" \
+    -e "s#define(\"APP_ENCRYPTION_KEY\", \"VFJPUVVFX0VTVEFfQ0hBVkVfREVfREVTRU5WT0xWSU0=\");#define(\"APP_ENCRYPTION_KEY\", \"${E_APP_KEY}\");#" \
     "$SITE_KERNEL"
 
 cp "$MANAGER_EXAMPLE" "$MANAGER_KERNEL"
@@ -197,6 +214,7 @@ sed -i \
     -e "s#define(\"REDIS_PREFIX\", \"app:manager:\");#define(\"REDIS_PREFIX\", \"${E_SLUG}:manager:\");#" \
     -e "s#define(\"KAFKA_TOPIC_EMAIL\", \"app_manager_emails\");#define(\"KAFKA_TOPIC_EMAIL\", \"${E_SLUG}_manager_emails\");#" \
     -e "s#define(\"KAFKA_CONSUMER_GROUP\", \"app-manager-email-worker-group\");#define(\"KAFKA_CONSUMER_GROUP\", \"${E_SLUG}-manager-email-worker-group\");#" \
+    -e "s#define(\"APP_ENCRYPTION_KEY\", \"VFJPUVVFX0VTVEFfQ0hBVkVfREVfREVTRU5WT0xWSU0=\");#define(\"APP_ENCRYPTION_KEY\", \"${E_APP_KEY}\");#" \
     "$MANAGER_KERNEL"
 
 # ===== Cor de marca em CSS e templates de email =====
@@ -309,6 +327,7 @@ fi
 
 echo "Gerado: $SITE_KERNEL"
 echo "Gerado: $MANAGER_KERNEL"
+echo "Gerado: APP_ENCRYPTION_KEY (identica nos dois kernels — valor nunca impresso aqui)"
 echo
 echo "ATENCAO — preencha manualmente antes de subir para producao:"
 echo "  - DB_NAME (sugestao por convencao: db_${SLUG})"
