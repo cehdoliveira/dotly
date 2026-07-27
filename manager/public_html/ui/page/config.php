@@ -497,6 +497,11 @@ foreach ($senderSettings as $senderKey => $senderValue) {
         if (empty($credSchema)) {
             continue;
         }
+        // json_encode + htmlspecialchars (mesmo padrao de $jsName acima, para
+        // openEdit/confirmToggle/confirmRemove): passa a string pronta como
+        // literal JS para dentro do atributo Alpine, em vez de interpolar PHP
+        // cru entre aspas simples manuais (achado da revisao do plano 026).
+        $credJsName = htmlspecialchars(json_encode((string)$g['name']), ENT_QUOTES, 'UTF-8');
     ?>
     <div id="gatewayCredsModal<?php echo $credGatewayIdx; ?>" class="modal fade" tabindex="-1"
          aria-labelledby="gatewayCredsModalLabel<?php echo $credGatewayIdx; ?>" aria-hidden="true">
@@ -512,16 +517,19 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                             style="font-size:0.9rem;font-weight:700;color:var(--text);">
                             <i class="bi bi-key me-2" style="color:var(--accent)" aria-hidden="true"></i>Credenciais — <?php echo htmlspecialchars((string)$g['name'], ENT_QUOTES, 'UTF-8'); ?>
                         </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                     </div>
 
                     <div class="modal-body" style="padding:1.25rem;">
-                        <?php foreach ($credSchema as $credField => $credDef): ?>
+                        <?php foreach ($credSchema as $credField => $credDef):
+                            $credInputId = 'cred-' . $credGatewayIdx . '-' . htmlspecialchars($credField, ENT_QUOTES, 'UTF-8');
+                        ?>
                             <div class="mb-3">
-                                <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">
+                                <label class="form-label" for="<?php echo $credInputId; ?>" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">
                                     <?php echo htmlspecialchars($credDef['label'], ENT_QUOTES, 'UTF-8'); ?>
                                 </label>
                                 <input type="<?php echo $credDef['secret'] ? 'password' : 'text'; ?>"
+                                       id="<?php echo $credInputId; ?>"
                                        name="cred_<?php echo htmlspecialchars($credField, ENT_QUOTES, 'UTF-8'); ?>"
                                        class="form-control"
                                        autocomplete="new-password"
@@ -544,7 +552,7 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                 <!-- form separado, FORA do form de cima (HTML nao aninha form) -->
                 <form method="POST" action="<?php echo htmlspecialchars($GLOBALS['config_url'], ENT_QUOTES, 'UTF-8'); ?>"
                       style="padding:0 1.25rem 1rem;"
-                      @submit.prevent="confirmClearCreds($event.target, '<?php echo htmlspecialchars((string)$g['name'], ENT_QUOTES, 'UTF-8'); ?>')">
+                      @submit.prevent="confirmClearCreds($event.target, <?php echo $credJsName; ?>)">
                     <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
                     <input type="hidden" name="action" value="credenciais-remover">
                     <input type="hidden" name="slug" value="<?php echo htmlspecialchars((string)$g['slug'], ENT_QUOTES, 'UTF-8'); ?>">

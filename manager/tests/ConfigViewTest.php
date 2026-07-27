@@ -186,6 +186,21 @@ final class ConfigViewTest extends TestCase
         $this->assertStringContainsString('type="password"', $html, 'campo secret deve usar input type=password');
         $this->assertStringNotContainsString($clearTextSecret, $html, 'valor em claro do campo secret nunca pode aparecer no HTML');
         $this->assertStringContainsString('••••' . mb_substr($clearTextSecret, -4), $html, 'placeholder deve mostrar o valor mascarado');
+
+        // Achados da revisao do plano 026 (Frontend/A11y): label do campo de
+        // credencial associado ao input via for=/id=, e o botao de fechar do
+        // modal nao usa btn-close-white (invisivel no tema claro).
+        $this->assertMatchesRegularExpression(
+            '/<label class="form-label" for="cred-1-access_token"[^>]*>\s*Access Token/s',
+            $html,
+            'label do campo access_token deve ter for= apontando pro id= do input correspondente'
+        );
+        $this->assertStringContainsString('id="cred-1-access_token"', $html);
+        $this->assertMatchesRegularExpression(
+            '/id="gatewayCredsModal1"[^\x00]*?<button type="button" class="btn-close" data-bs-dismiss="modal"/s',
+            $html,
+            'botao de fechar do modal de credenciais nao deve usar btn-close-white (invisivel no tema claro)'
+        );
     }
 
     /**
