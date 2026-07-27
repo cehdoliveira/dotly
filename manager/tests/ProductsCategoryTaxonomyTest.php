@@ -3,11 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Plano 023: cobre a taxonomia de categorias de ponta a ponta contra o banco —
- * products_model::CATEGORY_NAME_FIELD resolvendo o nome via subquery escalar,
- * produto sem ligacao lendo como string vazia, save_attach() trocando a
- * categoria (desativando a anterior em vez de deletar), e
- * products_model::CATEGORY_NAME_FILTER casando so os produtos ligados.
+ * Plano 023/023b: cobre a taxonomia de categorias de ponta a ponta contra o
+ * banco — products_model::attachCategoryName() resolvendo o nome via
+ * attach() de verdade, produto sem ligacao caindo no fallback "Geral",
+ * save_attach() trocando a categoria (desativando a anterior em vez de
+ * deletar), e products_model::CATEGORY_NAME_FILTER casando so os produtos
+ * ligados.
  */
 final class ProductsCategoryTaxonomyTest extends DBTestCase
 {
@@ -58,28 +59,25 @@ final class ProductsCategoryTaxonomyTest extends DBTestCase
 
         $this->attachCategory($productId, $categoryId);
 
-        $stmt = (new products_model())->select(
-            [" idx ", products_model::CATEGORY_NAME_FIELD],
-            "WHERE idx = ?",
-            [$productId]
-        );
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $model = new products_model();
+        $model->set_filter([" idx = ? "], [$productId]);
+        $model->load_data(false);
+        $model->attachCategoryName();
 
-        $this->assertSame($categoryName, $row['category']);
+        $this->assertSame($categoryName, $model->data[0]['category']);
+        $this->assertSame($categoryId, (int)$model->data[0]['categories_id']);
     }
 
-    public function testProductWithoutCategoryReadsAsEmptyString(): void
+    public function testProductWithoutCategoryLinkReadsAsGeral(): void
     {
         $productId = $this->createProduct();
 
-        $stmt = (new products_model())->select(
-            [" idx ", products_model::CATEGORY_NAME_FIELD],
-            "WHERE idx = ?",
-            [$productId]
-        );
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $model = new products_model();
+        $model->set_filter([" idx = ? "], [$productId]);
+        $model->load_data(false);
+        $model->attachCategoryName();
 
-        $this->assertSame('', (string)$row['category']);
+        $this->assertSame('Geral', $model->data[0]['category']);
     }
 
     public function testSaveAttachReplacesPreviousCategory(): void
@@ -92,14 +90,12 @@ final class ProductsCategoryTaxonomyTest extends DBTestCase
         $this->attachCategory($productId, $categoryAId);
         $this->attachCategory($productId, $categoryBId);
 
-        $stmt = (new products_model())->select(
-            [" idx ", products_model::CATEGORY_NAME_FIELD],
-            "WHERE idx = ?",
-            [$productId]
-        );
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $model = new products_model();
+        $model->set_filter([" idx = ? "], [$productId]);
+        $model->load_data(false);
+        $model->attachCategoryName();
 
-        $this->assertSame($categoryBName, $row['category']);
+        $this->assertSame($categoryBName, $model->data[0]['category']);
 
         // Consulta direta a tabela de attach (select() do products_model e sempre
         // FROM products — nao serve para contar linhas de products_categories).

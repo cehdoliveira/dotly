@@ -51,7 +51,7 @@ final class ProductsSortTest extends TestCase
     {
         $this->assertStringContainsString('stock', $this->resolveSort(['get' => ['sort' => 'estoque']])[2]);
         $this->assertStringContainsString('name', $this->resolveSort(['get' => ['sort' => 'nome']])[2]);
-        $this->assertStringContainsString('category', $this->resolveSort(['get' => ['sort' => 'categoria']])[2]);
+        $this->assertStringContainsString('categories', $this->resolveSort(['get' => ['sort' => 'categoria']])[2]);
     }
 
     public function testDirectionDefaultsToAscendingForAlphabeticalFirstClick(): void
