@@ -395,11 +395,22 @@ $filterParams = array_filter([
                         <div x-show="categoriesError" x-cloak class="alert alert-danger py-2 px-3 mb-3"
                             style="font-size:0.8rem;" x-text="categoriesError" role="alert"></div>
 
+                        <div class="d-flex gap-2 mb-3">
+                            <label for="new-category-name" class="visually-hidden">Nome da nova categoria</label>
+                            <input type="text" id="new-category-name" class="form-control form-control-sm" placeholder="Nome da nova categoria"
+                                maxlength="60" x-model="newCategoryName" autocomplete="off"
+                                @keydown.enter.prevent="addCategory()">
+                            <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
+                                :disabled="categoriesLoading" @click="addCategory()">
+                                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Adicionar
+                            </button>
+                        </div>
+
                         <template x-if="categories.length === 0">
-                            <p class="mb-3" style="font-size:0.82rem;color:var(--text-muted);">Nenhuma categoria cadastrada ainda.</p>
+                            <p class="mb-0" style="font-size:0.82rem;color:var(--text-muted);">Nenhuma categoria cadastrada ainda.</p>
                         </template>
 
-                        <ul class="list-unstyled mb-3">
+                        <ul class="list-unstyled mb-0">
                             <template x-for="cat in categories" :key="cat.idx">
                                 <li class="d-flex align-items-center gap-2 py-2" style="border-bottom:1px solid var(--border);">
 
@@ -441,17 +452,6 @@ $filterParams = array_filter([
                                 </li>
                             </template>
                         </ul>
-
-                        <div class="d-flex gap-2">
-                            <label for="new-category-name" class="visually-hidden">Nome da nova categoria</label>
-                            <input type="text" id="new-category-name" class="form-control form-control-sm" placeholder="Nome da nova categoria"
-                                maxlength="60" x-model="newCategoryName" autocomplete="off"
-                                @keydown.enter.prevent="addCategory()">
-                            <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
-                                :disabled="categoriesLoading" @click="addCategory()">
-                                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Adicionar
-                            </button>
-                        </div>
                     </div>
 
                     <div class="modal-footer" style="border-color:var(--border);padding:0.75rem 1.25rem;justify-content:end;">

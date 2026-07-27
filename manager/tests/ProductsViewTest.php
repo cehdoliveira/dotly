@@ -332,4 +332,25 @@ final class ProductsViewTest extends TestCase
         );
         $this->assertStringNotContainsString('x-html', $html, 'nome de categoria e renderizado com x-text, nunca x-html');
     }
+
+    public function testAddCategoryFormComesBeforeTheCategoryList(): void
+    {
+        $html = $this->renderStrict();
+
+        // Ancorado no inicio do modal de categorias: "x-for=cat in categories"
+        // tambem aparece nos selects dos modais de produto, que vem antes no HTML.
+        $modalPos = strpos($html, 'id="manageCategoriesModal"');
+        $this->assertIsInt($modalPos, 'o modal de categorias deve existir na pagina');
+
+        $formPos = strpos($html, 'id="new-category-name"', $modalPos);
+        $listPos = strpos($html, 'class="list-unstyled', $modalPos);
+
+        $this->assertIsInt($formPos, 'o campo de nova categoria deve existir no modal');
+        $this->assertIsInt($listPos, 'a lista de categorias deve existir no modal');
+        $this->assertLessThan(
+            $listPos,
+            $formPos,
+            'o input + botao Adicionar ficam no topo do modal, antes da lista de categorias'
+        );
+    }
 }
