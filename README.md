@@ -42,6 +42,9 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
    - Copie `logo.svg` e `favicon.svg` da marca para
      `site/public_html/assets/img/` e `manager/public_html/assets/img/`
      (sobrescrevem os defaults do vendor).
+   - (Opcional) Cadastre o **Endereço do Remetente** no manager, em `/config`
+     → "Endereço do Remetente" (`settings.sender_*`). Vazio = a etiqueta de
+     envio (`/pedidos/{id}/etiqueta`) imprime só o destinatário.
    - Cadastre as credenciais dos gateways de pagamento (Access Token/Webhook
      Secret do Mercado Pago, URL base/Token do PagBank, Handle da InfinitePay)
      no **manager**, em `/config` → "Gateways de Pagamento" — não ficam mais
@@ -85,6 +88,7 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
 | SMTP creds | `site/` e `manager/` `kernel.php` | `mail_from_mail`, `mail_from_host`, `mail_from_port`, `mail_from_user`, `mail_from_pwd` |
 | Logo e favicon | `site/` e `manager/` `public_html/assets/img/` | Copiar `logo.svg` + `favicon.svg` sobre os defaults |
 | Gateways de pagamento | manager, `/config` → "Gateways de Pagamento" | Cifradas em `payment_gateways.credentials_enc` (ver `APP_ENCRYPTION_KEY` acima) — fail-closed até preenchidas, gateway incompleto não entra no sorteio |
+| Endereço do remetente | manager, `/config` → "Endereço do Remetente" | `settings.sender_*` (migration `020_seed_sender_address.sql`). Opcional; vazio = etiqueta só com destinatário |
 | `MYSQL_DATABASE`, `MYSQL_USER` | `docker/.env` | O script sugere `db_${SLUG}` e `user_${SLUG}` no output; replicar no `.env` |
 
 O script nunca inventa segredos: `DB_PASS`, `mail_from_pwd` e demais ficam como
@@ -163,6 +167,11 @@ docker exec app php /var/www/app/manager/app/inc/lib/vendor/bin/phpunit -c /var/
 # Migrations (também rodam automaticamente via cron a cada 5min no container)
 docker exec app php /var/www/app/site/cgi-bin/run_migrations.php
 
+# Demais jobs de cron (todos */5min no container, cada um com flock + GET_LOCK próprio)
+docker exec app php /var/www/app/site/cgi-bin/dispatch_emails.php    # e-mails transacionais pendentes
+docker exec app php /var/www/app/site/cgi-bin/expire_orders.php      # expira pedidos vencidos, devolve estoque
+docker exec app php /var/www/app/site/cgi-bin/reconcile_charges.php  # confirma cobranças quando o webhook não chega
+
 # Verificação completa pré-merge (PHPStan host + PHPUnit no container, ambos envs)
 bash bin/test.sh
 
@@ -208,7 +217,11 @@ bin/init-whitelabel.sh \
   transação no início do request; `basic_redir($url)` faz commit,
   `basic_redir($url, rollback: true)` desfaz, e `localPDO::__destruct()`
   faz rollback de segurança se não houve redirect explícito. Controllers
-  não chamam `commit()`/`rollback()` manualmente.
+  não chamam `commit()`/`rollback()` manualmente. **Exceção única:**
+  `checkout_controller::finalize()` comita o pedido explicitamente ANTES da
+  chamada HTTP ao PSP (não segurar transação aberta durante rede), e compensa
+  a falha de criação da cobrança devolvendo o estoque em transação própria —
+  não por rollback.
 - **Soft-delete universal.** `active = 'yes'/'no'`. Nunca `DELETE FROM`.
 - **O dispatcher só trata GET e POST.** PUT/PATCH/DELETE são ignorados
   silenciosamente.
@@ -237,13 +250,24 @@ bin/init-whitelabel.sh \
   webhook não sobrescreve — o estoque já devolvido pode já ter sido vendido
   a outro comprador, então o caso vira log para reconciliação manual em vez
   de overselling silencioso.
+- **Webhook perdido tem fallback por cron.** `site/cgi-bin/reconcile_charges.php`
+  (cron a cada 5min) chama `OrderReconciler::reconcilePending()`: varre um lote
+  pequeno de cobranças `pendente` das últimas 24h com pedido ainda
+  `aguardando_pagamento`, consulta `fetchStatus()` no PSP e marca `pago` quando
+  confirmado — mesma guarda de corrida do webhook (escrita condicional, commit
+  por cobrança). **InfinitePay fica de fora de propósito**: não tem endpoint de
+  consulta por charge id (`fetchStatus()` sempre devolve `pendente`); para ela a
+  recuperação vem de `checkout_controller::done()`, que captura
+  `transaction_nsu`/`slug`/`order_nsu` da URL de retorno (fail-soft, sem
+  confirmar pagamento, e só se `order_nsu` bater com `gateway_charge_id`).
 - **Webhook do InfinitePay é público por design.** O PSP não publica
   assinatura de webhook — `InfinitePayGateway::verifyWebhook()` retorna
   `true` de propósito e NÃO é a camada de autenticação. A autenticidade vem
   da reconfirmação `confirmPayment()` (POST /payment_check, fail-closed) que
   o `webhook_controller` executa antes de qualquer escrita de negócio; antes
   dela só há leituras + rate limit por token de pedido (Redis) + guarda de
-  replay via UNIQUE em `pix_charges.transaction_nsu` (migration 010). Nenhum
+  replay via UNIQUE em `pix_charges.transaction_nsu`
+  (`migrations/010_create_table_pix_charges.sql`). Nenhum
   efeito irreversível (estoque, pedido, status) ocorre antes da
   reconfirmação — estoque é movimentado só no checkout, nunca no webhook.
   Não "consertar" o `return true` adicionando validação de assinatura que o
@@ -258,6 +282,24 @@ bin/init-whitelabel.sh \
   do sorteio qualquer gateway habilitado sem credencial completa, mesmo que
   isso esvazie o conjunto — é o único filtro da classe que pode travar a
   venda, de propósito.
+- **Categoria de produto é taxonomia, não coluna.** `products.category` não
+  existe mais (`migrations/017_drop_category_from_products.sql`): a relação vive
+  em `categories` + `products_categories` (M:N), gravada via
+  `DOLModel::save(..., ["categories"])` e lida via `attach(["categories"])`.
+  Na prática o produto tem **uma** categoria (a UI mostra o último vínculo
+  ativo); a categoria "Geral" vem seedada
+  (`migrations/018_seed_default_category_geral.sql`) e é o rótulo exibido para
+  produto sem vínculo ativo. O CRUD de categorias é um
+  modal em `/produtos` (criar/renomear/remover sem recarregar); remover categoria
+  é soft-delete e é bloqueado se houver produto vinculado.
+- **Etiqueta de envio usa o remetente cadastrado.** `/pedidos/{id}/etiqueta`
+  imprime a 2ª etiqueta (remetente) a partir de `settings.sender_*`, editável em
+  `/config` → "Endereço do Remetente" (com autopreenchimento por CEP via proxy
+  ViaCEP no servidor — o CSP bloqueia chamada direta do browser). Campos
+  obrigatórios: nome, CEP, logradouro, número, cidade e UF; todos vazios = sem
+  remetente e a etiqueta volta a imprimir só o destinatário. As chaves são
+  duplicadas de propósito entre `config_controller` e `orders_controller`
+  (`lib/`/`model/` são sincronizados entre os envs, controllers não).
 - **Referência a migration em comentário usa o NOME do arquivo**, nunca o número solto
   (`migrations/010_create_table_pix_charges.sql`, não "migration 010"). O squash de
   migrations renumerou tudo uma vez e os números soltos passaram a apontar para arquivos
