@@ -2,44 +2,51 @@
 class products_model extends DOLModel
 {
     /**
-     * Nome da categoria como campo de SELECT. A relacao mora em
-     * `products_categories` (tabela de attach, sem FK — convencao do projeto) e o
-     * nome em `categories`, mas TODA view e consumidor le `$product['category']`
-     * como string. A subquery escalar preserva esse contrato com UMA query.
-     *
-     * Por que nao DOLModel::attach(): attach() dispara duas queries POR LINHA
-     * carregada (ver DOLModel.php:381-415) — N+1 na listagem de 25 produtos do
-     * manager e na home inteira do site.
-     *
-     * Referencia `products.idx` com o nome cru da tabela porque load_data()
-     * monta "FROM products" sem alias (DOLModel.php:264).
-     *
-     * ORDER BY pc.idx DESC LIMIT 1: hoje a UI garante no maximo uma ligacao ativa
-     * por produto; se um dia houver mais, a mais recente prevalece em vez de a
-     * query quebrar.
-     */
-    public const CATEGORY_NAME_FIELD = " (SELECT c.name FROM categories c INNER JOIN products_categories pc ON pc.categories_id = c.idx AND pc.active = 'yes' WHERE pc.products_id = products.idx AND c.active = 'yes' ORDER BY pc.idx DESC LIMIT 1) AS category ";
-
-    /**
-     * idx da categoria ligada ao produto — e o que o <select> do formulario de
-     * produto precisa pre-selecionar. Nao entra no $field default: so a tela de
-     * edicao do manager usa.
-     */
-    public const CATEGORY_ID_FIELD = " (SELECT pc.categories_id FROM products_categories pc WHERE pc.active = 'yes' AND pc.products_id = products.idx ORDER BY pc.idx DESC LIMIT 1) AS categories_id ";
-
-    /**
      * Condicao de WHERE para "produtos desta categoria, pelo NOME". Usa um
      * placeholder `?` — passe o nome em $params, na mesma posicao. Mantem as URLs
      * publicas existentes (`/?cat=Nome` na home, `?categoria=Nome` no manager)
-     * funcionando sem traduzir nome -> idx antes da query.
+     * funcionando sem traduzir nome -> idx antes da query. Isto e um predicado
+     * de filtro (uma query so), diferente de resolver o nome pra EXIBICAO —
+     * essa parte usa attach(), ver attachCategoryName() abaixo.
      */
     public const CATEGORY_NAME_FILTER = " idx IN (SELECT pc.products_id FROM products_categories pc INNER JOIN categories c ON c.idx = pc.categories_id AND c.active = 'yes' WHERE pc.active = 'yes' AND c.name = ?) ";
 
-    protected array $field = [" idx ", " name ", " slug ", self::CATEGORY_NAME_FIELD, " is_infinity ", " description ", " dosage ", " purity_label ", " price_unit_cents ", " box_qty ", " stock "];
+    protected array $field = [" idx ", " name ", " slug ", " is_infinity ", " description ", " dosage ", " purity_label ", " price_unit_cents ", " box_qty ", " stock "];
     protected array $filter = [" active = 'yes' "];
 
     function __construct()
     {
         parent::__construct("products");
+    }
+
+    /**
+     * Resolve a categoria de cada produto JA CARREGADO (chame depois de
+     * load_data()) usando o attach() de verdade (convencao do projeto —
+     * mesma familia de auth_controller::attach(["profiles"])), e normaliza o
+     * resultado de volta pro contrato de sempre: `$row['category']` (string) e
+     * `$row['categories_id']` (int|null). Toda view/consumidor continua lendo
+     * category como string — so este metodo sabe que por baixo e uma tabela de
+     * attach.
+     *
+     * N+1 aceito de proposito: attach() faz 2 queries por linha carregada
+     * (DOLModel.php:381-415). Troca simples e deliberada — poucas categorias,
+     * paginas de no maximo 25 produtos no manager.
+     *
+     * "Geral" como fallback: depois da migration 018 todo produto ativo tem
+     * uma ligacao real, entao este fallback so cobre corrida entre o load e a
+     * migration, ou dado criado direto via model num teste sem passar por
+     * save_attach().
+     */
+    public function attachCategoryName(): void
+    {
+        $this->attach(["categories"], class_field: [" idx ", " name "]);
+
+        $data = $this->get_data();
+        foreach ($data as $key => $row) {
+            $linked = $row["categories_attach"][0] ?? null;
+            $data[$key]["category"]      = $linked["name"] ?? "Geral";
+            $data[$key]["categories_id"] = $linked["idx"]  ?? null;
+        }
+        $this->set_data($data);
     }
 }

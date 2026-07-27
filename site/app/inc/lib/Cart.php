@@ -125,9 +125,10 @@ class Cart
         $placeholders = implode(',', array_fill(0, count($productIds), '?'));
 
         $model = new products_model();
-        $model->set_field([" idx ", " name ", products_model::CATEGORY_NAME_FIELD, " price_unit_cents ", " box_qty "]);
+        $model->set_field([" idx ", " name ", " price_unit_cents ", " box_qty "]);
         $model->set_filter([" active = 'yes' ", " idx IN ($placeholders) "], $productIds);
         $model->load_data(false);
+        $model->attachCategoryName();
 
         $productsById = [];
         foreach ($model->data as $product) {
