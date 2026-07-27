@@ -139,6 +139,33 @@ final class MercadoPagoGatewayTest extends TestCase
         $this->assertFalse($result);
     }
 
+    /**
+     * Achado da revisao do plano 026 (Cobertura de Testes): antes do plano,
+     * "sem credencial" era um estado so alcancavel em kernel.php mal
+     * configurado; agora o admin pode apagar a credencial em runtime pelo
+     * pop-up "Remover credenciais" em /config, entao o caminho fail-closed de
+     * verifyWebhook() precisa de cobertura real, nao so teorica.
+     */
+    public function testVerifyWebhookWithClearedCredentialFailsClosed(): void
+    {
+        GatewayCredentials::clear('mercadopago');
+
+        $secret = self::TEST_SECRET;
+        $rawBody = '{"data":{"id":"123"}}';
+        $ts = '1700000000';
+        $requestId = 'req-1';
+        $v1 = $this->manifestSignature($secret, '123', $requestId, $ts);
+
+        $gateway = new MercadoPagoGateway();
+
+        $result = $gateway->verifyWebhook($rawBody, [
+            'x-signature'  => "ts={$ts},v1={$v1}",
+            'x-request-id' => $requestId,
+        ]);
+
+        $this->assertFalse($result, 'sem webhook_secret cadastrado, o webhook deve ser recusado mesmo com a assinatura que seria valida');
+    }
+
     public function testVerifyWebhookMalformedSignatureHeaderFails(): void
     {
         $gateway = new MercadoPagoGateway();

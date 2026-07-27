@@ -90,6 +90,28 @@ final class PagBankGatewayTest extends TestCase
         $this->assertFalse($gateway->verifyWebhook($rawBody, []));
     }
 
+    /**
+     * Achado da revisao do plano 026 (Cobertura de Testes): antes do plano,
+     * "sem credencial" era um estado so alcancavel em kernel.php mal
+     * configurado; agora o admin pode apagar a credencial em runtime pelo
+     * pop-up "Remover credenciais" em /config, entao o caminho fail-closed de
+     * verifyWebhook() precisa de cobertura real, nao so teorica.
+     */
+    public function testVerifyWebhookWithClearedCredentialFailsClosed(): void
+    {
+        GatewayCredentials::clear('pagbank');
+
+        $rawBody = '{"qr_codes":[{"id":"QRCO_X","amount":{"value":1000}}]}';
+        $signature = hash('sha256', self::TEST_TOKEN . '-' . $rawBody);
+
+        $gateway = new PagBankGateway();
+
+        $this->assertFalse(
+            $gateway->verifyWebhook($rawBody, ['x-authenticity-token' => $signature]),
+            'sem token cadastrado, o webhook deve ser recusado mesmo com a assinatura que seria valida'
+        );
+    }
+
     public function testVerifyWebhookReformattedBodyFailsSignature(): void
     {
         $token = $this->pagBankToken();
