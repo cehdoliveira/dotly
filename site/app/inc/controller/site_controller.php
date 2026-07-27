@@ -15,7 +15,7 @@ class site_controller
         }
 
         if ($cat !== '') {
-            $filters[] = " category = ? ";
+            $filters[]      = products_model::CATEGORY_NAME_FILTER;
             $filterParams[] = $cat;
         }
 
@@ -41,12 +41,20 @@ class site_controller
         }
         unset($product);
 
-        $categoriesModel = new products_model();
-        $categoriesStmt = $categoriesModel->select(
-            [" DISTINCT category "],
-            "WHERE active = 'yes' ORDER BY category ASC"
+        // Chips da home: so categorias COM produto ativo. Preserva o
+        // comportamento do antigo "SELECT DISTINCT products.category" — uma
+        // categoria recem-criada no manager, ainda sem produto, nao vira chip
+        // vazio na vitrine.
+        $categoriesModel = new categories_model();
+        $categoriesStmt  = $categoriesModel->select(
+            [" name "],
+            "WHERE active = 'yes'
+               AND EXISTS (SELECT 1 FROM products_categories pc
+                           INNER JOIN products p ON p.idx = pc.products_id AND p.active = 'yes'
+                           WHERE pc.active = 'yes' AND pc.categories_id = categories.idx)
+             ORDER BY name ASC"
         );
-        $categories = array_column($categoriesStmt->fetchAll(\PDO::FETCH_ASSOC), 'category');
+        $categories = array_column($categoriesStmt->fetchAll(\PDO::FETCH_ASSOC), 'name');
 
         $alpineControllers = ['home', 'shop'];
 
