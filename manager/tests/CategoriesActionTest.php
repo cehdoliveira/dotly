@@ -135,6 +135,28 @@ final class CategoriesActionTest extends DBTestCase
     }
 
     /**
+     * O dropdown de filtro de /produtos come da mesma lista dos <select> dos
+     * formularios (uma unica consulta em categories_model). Categoria sem
+     * nenhum produto ligado tambem tem que aparecer -- antes o filtro usava uma
+     * consulta separada com EXISTS em products_categories, e uma categoria
+     * recem-criada no modal sumia do filtro ate ganhar o primeiro produto.
+     */
+    public function testLoadCategoryListsIncludesCategoryWithoutProducts(): void
+    {
+        $suffix     = uniqid();
+        $name       = "ZZZ-Sem-Produto-{$suffix}";
+        $categoryId = $this->createCategory(['name' => $name]);
+
+        $controller = new products_controller();
+        $method     = new ReflectionMethod($controller, 'loadCategoryLists');
+        $method->setAccessible(true);
+        [$allCategories, ] = $method->invoke($controller);
+
+        $this->assertSame(0, $this->callProductsInCategory($categoryId), 'a categoria do teste nao tem produto ligado');
+        $this->assertContains($name, array_column($allCategories, 'name'), 'categoria sem produto deve alimentar o filtro do mesmo jeito');
+    }
+
+    /**
      * Achado do review de /phpship: categories_action() nao confere rowCount()
      * antes de responder sucesso na remocao -- remover um idx inexistente (ja
      * removido, ou nunca existiu) cai no mesmo caminho de sucesso silencioso.

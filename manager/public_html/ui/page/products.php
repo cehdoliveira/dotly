@@ -5,7 +5,6 @@ $csrfToken  = htmlspecialchars($_SESSION['_csrf_token'] ?? '', ENT_QUOTES, 'UTF-
 
 $currentQ          = $currentQ ?? '';
 $currentCategory   = $currentCategory ?? '';
-$categories        = $categories ?? [];
 $allCategories     = $allCategories ?? [];
 $defaultCategoryId = $defaultCategoryId ?? 0;
 $currentStock      = $currentStock ?? '';
@@ -82,9 +81,10 @@ $filterParams = array_filter([
                     <label class="orders-filter-label" for="products-filter-categoria">Categoria</label>
                     <select id="products-filter-categoria" name="categoria" class="form-select form-select-sm">
                         <option value="">Todas as categorias</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $currentCategory === $cat ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?>
+                        <?php foreach ($allCategories as $cat): ?>
+                            <?php $catName = (string)($cat['name'] ?? ''); ?>
+                            <option value="<?php echo htmlspecialchars($catName, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $currentCategory === $catName ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($catName, ENT_QUOTES, 'UTF-8'); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -395,11 +395,22 @@ $filterParams = array_filter([
                         <div x-show="categoriesError" x-cloak class="alert alert-danger py-2 px-3 mb-3"
                             style="font-size:0.8rem;" x-text="categoriesError" role="alert"></div>
 
+                        <div class="d-flex gap-2 mb-3">
+                            <label for="new-category-name" class="visually-hidden">Nome da nova categoria</label>
+                            <input type="text" id="new-category-name" class="form-control form-control-sm" placeholder="Nome da nova categoria"
+                                maxlength="60" x-model="newCategoryName" autocomplete="off"
+                                @keydown.enter.prevent="addCategory()">
+                            <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
+                                :disabled="categoriesLoading" @click="addCategory()">
+                                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Adicionar
+                            </button>
+                        </div>
+
                         <template x-if="categories.length === 0">
-                            <p class="mb-3" style="font-size:0.82rem;color:var(--text-muted);">Nenhuma categoria cadastrada ainda.</p>
+                            <p class="mb-0" style="font-size:0.82rem;color:var(--text-muted);">Nenhuma categoria cadastrada ainda.</p>
                         </template>
 
-                        <ul class="list-unstyled mb-3">
+                        <ul class="list-unstyled mb-0">
                             <template x-for="cat in categories" :key="cat.idx">
                                 <li class="d-flex align-items-center gap-2 py-2" style="border-bottom:1px solid var(--border);">
 
@@ -441,17 +452,6 @@ $filterParams = array_filter([
                                 </li>
                             </template>
                         </ul>
-
-                        <div class="d-flex gap-2">
-                            <label for="new-category-name" class="visually-hidden">Nome da nova categoria</label>
-                            <input type="text" id="new-category-name" class="form-control form-control-sm" placeholder="Nome da nova categoria"
-                                maxlength="60" x-model="newCategoryName" autocomplete="off"
-                                @keydown.enter.prevent="addCategory()">
-                            <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
-                                :disabled="categoriesLoading" @click="addCategory()">
-                                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Adicionar
-                            </button>
-                        </div>
                     </div>
 
                     <div class="modal-footer" style="border-color:var(--border);padding:0.75rem 1.25rem;justify-content:end;">

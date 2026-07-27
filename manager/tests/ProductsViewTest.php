@@ -88,7 +88,6 @@ final class ProductsViewTest extends TestCase
         $page              = $overrides['page'] ?? 1;
         $currentQ          = $overrides['currentQ'] ?? '';
         $currentCategory   = $overrides['currentCategory'] ?? '';
-        $categories        = $overrides['categories'] ?? ['Vestuário', 'Calçados'];
         $allCategories     = $overrides['allCategories'] ?? [
             ['idx' => 1, 'name' => 'Vestuário'],
             ['idx' => 2, 'name' => 'Calçados'],
@@ -101,7 +100,7 @@ final class ProductsViewTest extends TestCase
 
         ob_start();
         try {
-            (function () use ($products, $totalPages, $page, $currentQ, $currentCategory, $categories, $allCategories, $defaultCategoryId, $currentStock, $currentSort, $currentDir, $lowStockThreshold) {
+            (function () use ($products, $totalPages, $page, $currentQ, $currentCategory, $allCategories, $defaultCategoryId, $currentStock, $currentSort, $currentDir, $lowStockThreshold) {
                 include dirname(__DIR__) . '/public_html/ui/page/products.php';
             })();
         } catch (\Throwable $e) {
@@ -183,7 +182,10 @@ final class ProductsViewTest extends TestCase
 
     public function testCategoryDropdownRendersOptionsFromList(): void
     {
-        $html = $this->renderStrict(['categories' => ['Vestuário', 'Calçados']]);
+        $html = $this->renderStrict(['allCategories' => [
+            ['idx' => 1, 'name' => 'Vestuário'],
+            ['idx' => 2, 'name' => 'Calçados'],
+        ]]);
 
         $this->assertStringContainsString('name="categoria"', $html, 'deve haver um campo select de categoria');
         $this->assertStringContainsString('Todas as categorias', $html, 'opcao neutra para nao filtrar');
@@ -193,14 +195,20 @@ final class ProductsViewTest extends TestCase
 
     public function testSelectedCategoryIsMarkedSelected(): void
     {
-        $html = $this->renderStrict(['currentCategory' => 'Vestuário', 'categories' => ['Vestuário', 'Calçados']]);
+        $html = $this->renderStrict([
+            'currentCategory' => 'Vestuário',
+            'allCategories'   => [
+                ['idx' => 1, 'name' => 'Vestuário'],
+                ['idx' => 2, 'name' => 'Calçados'],
+            ],
+        ]);
 
         $this->assertMatchesRegularExpression('/value="Vestuário"\s+selected/', $html, 'a categoria filtrada deve ficar selecionada apos o submit');
     }
 
     public function testCategoryOptionsAreEscaped(): void
     {
-        $html = $this->renderStrict(['categories' => ['"><script>alert(3)</script>']]);
+        $html = $this->renderStrict(['allCategories' => [['idx' => 1, 'name' => '"><script>alert(3)</script>']]]);
 
         $this->assertStringNotContainsString('<script>alert(3)</script>', $html, 'valores de categoria vindos do banco devem ser escapados');
     }
@@ -323,5 +331,26 @@ final class ProductsViewTest extends TestCase
             'o select de edicao deve sair da lista reativa'
         );
         $this->assertStringNotContainsString('x-html', $html, 'nome de categoria e renderizado com x-text, nunca x-html');
+    }
+
+    public function testAddCategoryFormComesBeforeTheCategoryList(): void
+    {
+        $html = $this->renderStrict();
+
+        // Ancorado no inicio do modal de categorias: "x-for=cat in categories"
+        // tambem aparece nos selects dos modais de produto, que vem antes no HTML.
+        $modalPos = strpos($html, 'id="manageCategoriesModal"');
+        $this->assertIsInt($modalPos, 'o modal de categorias deve existir na pagina');
+
+        $formPos = strpos($html, 'id="new-category-name"', $modalPos);
+        $listPos = strpos($html, 'class="list-unstyled', $modalPos);
+
+        $this->assertIsInt($formPos, 'o campo de nova categoria deve existir no modal');
+        $this->assertIsInt($listPos, 'a lista de categorias deve existir no modal');
+        $this->assertLessThan(
+            $listPos,
+            $formPos,
+            'o input + botao Adicionar ficam no topo do modal, antes da lista de categorias'
+        );
     }
 }
