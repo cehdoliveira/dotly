@@ -5,7 +5,14 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Cobre InfinitePayGateway direto — sem rede, sem banco. Estende TestCase puro.
+ * Cobre InfinitePayGateway direto — sem rede. Estende TestCase puro (nao
+ * DBTestCase, nao precisa de $this->con); buildChargeBody()/
+ * buildPaymentCheckBody() chamam handle() internamente, que desde o plano 026
+ * le a credencial via GatewayCredentials::get() (consulta a linha real
+ * 'infinitepay' em payment_gateways) — nenhum teste aqui depende do VALOR do
+ * handle (so verifica que a chave 'handle' aparece no corpo montado), entao
+ * nao ha necessidade de semear/restaurar credencial como em
+ * MercadoPagoGatewayTest/PagBankGatewayTest.
  *
  * Documentacao executavel da decisao registrada: InfinitePay nao documenta
  * assinatura de webhook publicamente, entao verifyWebhook() sempre retorna
