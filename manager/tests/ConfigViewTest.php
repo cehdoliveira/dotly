@@ -32,7 +32,7 @@ final class ConfigViewTest extends TestCase
 
         $urls = [
             'home_url' => '/', 'customers_url' => '/clientes', 'products_url' => '/produtos',
-            'orders_url' => '/pedidos', 'logout_url' => '/sair', 'config_url' => '/config', 'config_users_url' => '/config/usuarios', 'customer_url' => '/clientes/%d', 'order_url' => '/pedidos/%d',
+            'orders_url' => '/pedidos', 'logout_url' => '/sair', 'config_url' => '/config', 'config_users_url' => '/config/usuarios', 'config_cep_url' => '/config/cep/', 'customer_url' => '/clientes/%d', 'order_url' => '/pedidos/%d',
         ];
         foreach ($urls as $key => $value) {
             $this->globalsBackup[$key] = $GLOBALS[$key] ?? null;

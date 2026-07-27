@@ -208,6 +208,7 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                 <form method="POST" action="<?php echo htmlspecialchars($GLOBALS['config_url'], ENT_QUOTES, 'UTF-8'); ?>">
                     <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
                     <input type="hidden" name="action" value="remetente">
+                    <input type="hidden" id="cep-endpoint" value="<?php echo htmlspecialchars($GLOBALS['config_cep_url'], ENT_QUOTES, 'UTF-8'); ?>">
                     <div class="row g-3">
                         <div class="col-12 col-lg-6">
                             <label class="form-label" for="snd-name">Nome / Razão social</label>
@@ -215,15 +216,17 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                         </div>
                         <div class="col-12 col-sm-4 col-lg-2">
                             <label class="form-label" for="snd-zip">CEP</label>
-                            <input type="text" class="form-control" id="snd-zip" name="sender_zip" inputmode="numeric" maxlength="9" placeholder="12345-678" value="<?php echo $f_sender['sender_zip']; ?>">
+                            <input type="text" class="form-control" id="snd-zip" name="sender_zip" inputmode="numeric" maxlength="9" placeholder="12345-678" value="<?php echo $f_sender['sender_zip']; ?>" @input="maskCep" @blur="lookupCep">
+                            <div class="form-text" x-show="cepLoading" x-cloak>Buscando endereço…</div>
+                            <div class="form-text text-danger" x-show="cepError" x-cloak x-text="cepError"></div>
                         </div>
                         <div class="col-12 col-sm-8 col-lg-4">
                             <label class="form-label" for="snd-street">Logradouro</label>
-                            <input type="text" class="form-control" id="snd-street" name="sender_street" maxlength="255" value="<?php echo $f_sender['sender_street']; ?>">
+                            <input type="text" class="form-control" id="snd-street" name="sender_street" maxlength="255" value="<?php echo $f_sender['sender_street']; ?>" x-ref="senderStreet">
                         </div>
                         <div class="col-12 col-sm-4 col-lg-2">
                             <label class="form-label" for="snd-number">Número</label>
-                            <input type="text" class="form-control" id="snd-number" name="sender_number" maxlength="20" value="<?php echo $f_sender['sender_number']; ?>">
+                            <input type="text" class="form-control" id="snd-number" name="sender_number" maxlength="20" value="<?php echo $f_sender['sender_number']; ?>" x-ref="senderNumber">
                         </div>
                         <div class="col-12 col-sm-8 col-lg-4">
                             <label class="form-label" for="snd-complement">Complemento</label>
@@ -231,15 +234,15 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                         </div>
                         <div class="col-12 col-sm-6 col-lg-3">
                             <label class="form-label" for="snd-district">Bairro</label>
-                            <input type="text" class="form-control" id="snd-district" name="sender_district" maxlength="255" value="<?php echo $f_sender['sender_district']; ?>">
+                            <input type="text" class="form-control" id="snd-district" name="sender_district" maxlength="255" value="<?php echo $f_sender['sender_district']; ?>" x-ref="senderDistrict">
                         </div>
                         <div class="col-12 col-sm-4 col-lg-2">
                             <label class="form-label" for="snd-city">Cidade</label>
-                            <input type="text" class="form-control" id="snd-city" name="sender_city" maxlength="255" value="<?php echo $f_sender['sender_city']; ?>">
+                            <input type="text" class="form-control" id="snd-city" name="sender_city" maxlength="255" value="<?php echo $f_sender['sender_city']; ?>" x-ref="senderCity">
                         </div>
                         <div class="col-12 col-sm-2 col-lg-1">
                             <label class="form-label" for="snd-uf">UF</label>
-                            <input type="text" class="form-control" id="snd-uf" name="sender_uf" maxlength="2" value="<?php echo $f_sender['sender_uf']; ?>">
+                            <input type="text" class="form-control" id="snd-uf" name="sender_uf" maxlength="2" value="<?php echo $f_sender['sender_uf']; ?>" x-ref="senderUf">
                         </div>
                     </div>
                     <div class="mt-3 d-flex justify-content-end">

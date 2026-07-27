@@ -2,9 +2,61 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('dashboardController', () => ({
         editData: { idx: 0, name: '', mail: '' },
         _modal: null,
+        cepError: '',
+        cepLoading: false,
 
         init() {
             this._modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+        },
+
+        onlyDigits(str) {
+            return String(str).replace(/\D/g, '');
+        },
+
+        // 00000-000
+        maskCep(e) {
+            const d = this.onlyDigits(e.target.value).slice(0, 8);
+            e.target.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+            this.cepError = '';
+        },
+
+        cepUrl() {
+            return document.getElementById('cep-endpoint').value;
+        },
+
+        // Dispara no blur do CEP: busca no proxy e preenche o endereco. Fail-soft:
+        // qualquer erro so mostra cepError, os campos continuam editaveis.
+        async lookupCep(e) {
+            const cep = this.onlyDigits(e.target.value);
+            this.cepError = '';
+            if (cep.length !== 8) {
+                return;
+            }
+
+            this.cepLoading = true;
+            try {
+                const res = await fetch(this.cepUrl() + cep, {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' },
+                });
+                const data = await res.json().catch(() => null);
+
+                if (!res.ok || data === null || data.error) {
+                    this.cepError = (data && data.error) || 'Não foi possível buscar o CEP. Preencha o endereço manualmente.';
+                    return;
+                }
+
+                if (data.street) this.$refs.senderStreet.value = data.street;
+                if (data.district) this.$refs.senderDistrict.value = data.district;
+                if (data.city) this.$refs.senderCity.value = data.city;
+                if (data.uf) this.$refs.senderUf.value = data.uf;
+
+                this.$refs.senderNumber.focus();
+            } catch (err) {
+                this.cepError = 'Não foi possível buscar o CEP. Preencha o endereço manualmente.';
+            } finally {
+                this.cepLoading = false;
+            }
         },
 
         openEdit(idx, name, mail) {
