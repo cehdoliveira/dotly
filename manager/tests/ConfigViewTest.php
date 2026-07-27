@@ -56,8 +56,13 @@ final class ConfigViewTest extends TestCase
     /**
      * @param array<string,mixed> $user
      * @param array<int,array<string,mixed>> $gateways
+     * @param array<string,string>|null $senderSettings null (default) deixa a
+     *     variavel ausente na view, que ja tem `$senderSettings ?? [...8 chaves
+     *     vazias...]` — `null` passa pelo `??` do mesmo jeito que "variavel nao
+     *     definida", entao os testes existentes (que nunca passam esse 3o
+     *     parametro) continuam se comportando exatamente como antes.
      */
-    private function render(array $user = [], array $gateways = []): string
+    private function render(array $user = [], array $gateways = [], ?array $senderSettings = null): string
     {
         set_error_handler(static function (int $errno, string $errstr): bool {
             throw new \ErrorException($errstr, 0, $errno);
@@ -65,7 +70,7 @@ final class ConfigViewTest extends TestCase
 
         ob_start();
         try {
-            (function () use ($user, $gateways) {
+            (function () use ($user, $gateways, $senderSettings) {
                 include dirname(__DIR__) . '/public_html/ui/page/config.php';
             })();
         } catch (\Throwable $e) {
@@ -147,5 +152,26 @@ final class ConfigViewTest extends TestCase
 
         $this->assertStringContainsString('R$ 2.500,00', $html, 'celula de exibicao deve mostrar o teto formatado');
         $this->assertMatchesRegularExpression('/name="max_order_cents"[^>]*value="2\.500,00">/s', $html, 'input do teto deve vir pre-preenchido');
+    }
+
+    public function testSenderFormRendersAndEscapes(): void
+    {
+        $html = $this->render(
+            ['name' => 'Admin', 'mail' => 'a@b.com', 'login' => 'admin', 'phone' => ''],
+            [],
+            [
+                'sender_name' => '"><script>alert(1)</script>', 'sender_zip' => '13010100',
+                'sender_street' => 'R. Exemplo', 'sender_number' => '45',
+                'sender_complement' => '', 'sender_district' => 'Centro',
+                'sender_city' => 'Campinas', 'sender_uf' => 'SP',
+            ]
+        );
+
+        $this->assertStringContainsString('Endereço do Remetente', $html);
+        $this->assertStringContainsString('name="action" value="remetente"', $html);
+        $this->assertStringContainsString('name="sender_zip"', $html);
+        $this->assertStringContainsString('value="13010100"', $html);
+        $this->assertStringNotContainsString('<script>alert(1)</script>', $html, 'nome do remetente deve ser escapado, nunca renderizado cru');
+        $this->assertStringContainsString('&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;', $html);
     }
 }
