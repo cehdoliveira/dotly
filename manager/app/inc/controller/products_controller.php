@@ -192,6 +192,193 @@ class products_controller
         basic_redir($products_url, rollback: $rollback);
     }
 
+    /** Tamanho maximo do nome da categoria — bate com `categories.name VARCHAR(60)`. */
+    private const CATEGORY_NAME_MAX = 60;
+
+    /**
+     * Todas as categorias ativas, como [['idx' => int, 'name' => string], ...].
+     * Uma unica fonte para o <select> dos formularios de produto (render do PHP)
+     * e para a lista do modal de categorias (payload JSON) — se as duas
+     * divergissem, adicionar categoria no pop-up nao a faria aparecer no select.
+     *
+     * @return array<int, array{idx:int, name:string}>
+     */
+    private function allCategories(): array
+    {
+        $stmt = (new categories_model())->select(
+            [" idx ", " name "],
+            "WHERE active = 'yes' ORDER BY name ASC"
+        );
+
+        $rows = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $rows[] = ['idx' => (int)$row['idx'], 'name' => (string)$row['name']];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Quantos produtos ATIVOS estao ligados a esta categoria. Usado para recusar
+     * a remocao de uma categoria em uso — sem FOREIGN KEY (convencao do
+     * projeto), o banco nao faria essa guarda sozinho.
+     */
+    private function productsInCategory(int $categoryId): int
+    {
+        $stmt = (new products_model())->select(
+            [" COUNT(*) AS total "],
+            "WHERE active = 'yes'
+               AND idx IN (SELECT pc.products_id FROM products_categories pc
+                           WHERE pc.active = 'yes' AND pc.categories_id = ?)",
+            [$categoryId]
+        );
+
+        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
+    }
+
+    /**
+     * Outra categoria ATIVA ja usa este nome? $excludeIdx tira a propria linha da
+     * checagem (renomear "Peptideos" para "Peptideos" nao e conflito).
+     *
+     * A checagem existe alem do UNIQUE funcional do banco (migration 015) para o
+     * usuario receber "Ja existe uma categoria com esse nome" em vez de o
+     * PDOException virar "Database error" generico. A colacao
+     * utf8mb4_unicode_ci e case-insensitive, entao "peptideos" conflita com
+     * "Peptideos" — igual ao que o UNIQUE faria.
+     */
+    private function categoryNameTaken(string $name, int $excludeIdx = 0): bool
+    {
+        $stmt = (new categories_model())->select(
+            [" idx "],
+            "WHERE active = 'yes' AND name = ? AND idx <> ?",
+            [$name, $excludeIdx]
+        );
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    }
+
+    /**
+     * Fecha a requisicao com o estado atual das categorias em JSON.
+     *
+     * $commit=true e OBRIGATORIO em todo caminho que escreveu no banco:
+     * localPDO abre UMA transacao por request e quem comita normalmente e o
+     * basic_redir(). json_response() faz echo+exit e NAO toca na transacao, entao
+     * sem este commit() o localPDO::__destruct() faz rollback e a resposta
+     * "sucesso" some no proximo F5. (O cart_controller nao precisa disto porque
+     * so escreve em $_SESSION.)
+     *
+     * csrf_token vai no payload porque validate_csrf() consome o token a cada
+     * POST valido — sem devolver um novo, a segunda acao do modal falha assim que
+     * passa a janela de graca de 10s. Mesmo motivo do cart_controller.
+     */
+    private function categoriesJsonResponse(bool $commit, ?string $error = null, int $code = 200): never
+    {
+        if ($commit) {
+            localPDO::getInstance()->commit();
+        }
+
+        if (empty($_SESSION['_csrf_token'])) {
+            $_SESSION['_csrf_token'] = random_token();
+        }
+
+        json_response([
+            'categories' => $this->allCategories(),
+            'csrf_token' => $_SESSION['_csrf_token'],
+            'error'      => $error,
+        ], $code);
+    }
+
+    /**
+     * CRUD de categorias do modal de /produtos (criar / renomear / remover).
+     * Responde SEMPRE JSON — o pop-up atualiza a lista sem recarregar a pagina.
+     *
+     * Excecao unica: validate_csrf() falhando responde com um 302 HTML
+     * (basic_redir), nao JSON. O cliente trata resposta nao-JSON como "sessao
+     * expirada, recarregue" — mesmo padrao do shopController.js do site.
+     */
+    public function categories_action(array $info): void
+    {
+        global $products_url;
+
+        $post   = $info['post'] ?? [];
+        $action = (string)($post['action'] ?? '');
+        $idx    = (int)($post['idx'] ?? 0);
+
+        validate_csrf($post['_csrf_token'] ?? null, $products_url);
+
+        $name = trim((string)preg_replace('/\s+/', ' ', (string)($post['name'] ?? '')));
+
+        try {
+            if ($action === 'criar' || $action === 'editar') {
+                if ($name === '') {
+                    $this->categoriesJsonResponse(false, 'Informe o nome da categoria.', 422);
+                }
+                if (mb_strlen($name) > self::CATEGORY_NAME_MAX) {
+                    $this->categoriesJsonResponse(false, 'Categoria deve ter no máximo ' . self::CATEGORY_NAME_MAX . ' caracteres.', 422);
+                }
+            }
+
+            if ($action === 'criar') {
+                if ($this->categoryNameTaken($name)) {
+                    $this->categoriesJsonResponse(false, 'Já existe uma categoria com esse nome.', 422);
+                }
+
+                $category = new categories_model();
+                $category->populate(['name' => $name]);
+                $category->save();
+
+                $this->categoriesJsonResponse(true);
+            }
+
+            if ($idx <= 0) {
+                $this->categoriesJsonResponse(false, 'Categoria inválida.', 422);
+            }
+
+            if ($action === 'editar') {
+                if ($this->categoryNameTaken($name, $idx)) {
+                    $this->categoriesJsonResponse(false, 'Já existe uma categoria com esse nome.', 422);
+                }
+
+                $category = new categories_model();
+                $category->set_filter(["idx = ?"], [$idx]);
+                $category->populate(['name' => $name]);
+                $category->save();
+
+                // Nao ha cascata a fazer: os produtos apontam para o IDX da
+                // categoria (products_categories), nao para o nome. Renomear ja
+                // vale para todo produto ligado.
+                $this->categoriesJsonResponse(true);
+            }
+
+            if ($action === 'remover') {
+                $inUse = $this->productsInCategory($idx);
+                if ($inUse > 0) {
+                    $this->categoriesJsonResponse(
+                        false,
+                        'Existem ' . $inUse . ' produto(s) nessa categoria. Mude a categoria deles antes de remover.',
+                        422
+                    );
+                }
+
+                $category = new categories_model();
+                $category->set_filter(["idx = ?"], [$idx]);
+                $category->remove();
+
+                $this->categoriesJsonResponse(true);
+            }
+
+            $this->categoriesJsonResponse(false, 'Ação inválida.', 400);
+        } catch (RuntimeException $e) {
+            // executePrepared() ja fez rollback antes de lancar (localPDO.php:196-203).
+            Logger::getInstance()->error("categories_action failed", [
+                "error"  => $e->getMessage(),
+                "action" => $action,
+                "idx"    => $idx,
+            ]);
+            $this->categoriesJsonResponse(false, 'Falha ao salvar a categoria. Tente novamente.', 500);
+        }
+    }
+
     /**
      * Monta o filtro da listagem: dois eixos independentes, unidos por AND —
      * busca por nome (LIKE) e categoria exata (dropdown). Os curingas LIKE
@@ -394,11 +581,7 @@ class products_controller
             );
             $categories = array_column($inUseStmt->fetchAll(PDO::FETCH_ASSOC), 'name');
 
-            $allStmt = (new categories_model())->select(
-                [" idx ", " name "],
-                "WHERE active = 'yes' ORDER BY name ASC"
-            );
-            $allCategories = $allStmt->fetchAll(PDO::FETCH_ASSOC);
+            $allCategories = $this->allCategories();
 
             return [$categories, $allCategories, $this->resolveDefaultCategoryId($allCategories)];
         } catch (RuntimeException $e) {

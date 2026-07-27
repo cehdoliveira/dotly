@@ -32,7 +32,8 @@ final class ProductsViewTest extends TestCase
 
         $urls = [
             'home_url' => '/', 'customers_url' => '/clientes', 'profiles_url' => '/perfis',
-            'products_url' => '/produtos', 'orders_url' => '/pedidos',
+            'products_url' => '/produtos', 'product_categories_url' => '/produtos/categorias',
+            'orders_url' => '/pedidos',
             'gateways_url' => '/gateways', 'logout_url' => '/sair',
         ];
         foreach ($urls as $key => $value) {
@@ -277,15 +278,50 @@ final class ProductsViewTest extends TestCase
             'defaultCategoryId' => 9,
         ]);
 
+        // Plano 024: o <option> do select de criacao deixou de ser renderizado
+        // pelo PHP (agora sai de um <template x-for> do Alpine) -- o pre-select
+        // vira estado Alpine (createCategoryId), inicializado a partir do 2o
+        // argumento passado a productsController() no x-data da raiz.
+        $this->assertStringContainsString(
+            '&quot;idx&quot;:9,&quot;name&quot;:&quot;Geral&quot;',
+            $html,
+            'a categoria "Geral" deve estar na lista serializada para o Alpine'
+        );
         $this->assertMatchesRegularExpression(
-            '/<option value="9"\s+selected>\s*Geral/',
+            '/x-data="productsController\(.*,\s*9\)"/',
             $html,
-            'a categoria default (ex.: "Geral") deve vir pre-selecionada no modal de criacao'
+            'o idx da categoria default deve ser passado como 2o argumento de productsController(), pra pre-selecionar o select de criacao via Alpine'
         );
-        $this->assertDoesNotMatchRegularExpression(
-            '/<option value="1"\s+selected>\s*Vestuário/',
+    }
+
+    public function testHeaderRendersNovaCategoriaButton(): void
+    {
+        $html = $this->renderStrict();
+
+        $this->assertStringContainsString('openCategories()', $html, 'o botao Nova Categoria abre o modal de categorias');
+        $this->assertStringContainsString('Nova Categoria', $html);
+        $this->assertStringContainsString('id="manageCategoriesModal"', $html);
+    }
+
+    public function testCategorySelectsAreDrivenByAlpineList(): void
+    {
+        $html = $this->renderStrict();
+
+        // Os dois <select> de categoria dos modais de produto saem da mesma
+        // lista reativa do Alpine (categories) -- checados por id em vez de um
+        // count global de "x-for=\"cat in categories\"", porque a lista do
+        // modal de categorias (Step 4d) reusa a mesma expressao Alpine para o
+        // seu proprio <template x-for>.
+        $this->assertMatchesRegularExpression(
+            '/id="create-product-categoria"[^>]*>.*?<template x-for="cat in categories"/s',
             $html,
-            'so a categoria default deve vir pre-selecionada, nenhuma outra'
+            'o select de criacao deve sair da lista reativa'
         );
+        $this->assertMatchesRegularExpression(
+            '/id="edit-product-categoria"[^>]*>.*?<template x-for="cat in categories"/s',
+            $html,
+            'o select de edicao deve sair da lista reativa'
+        );
+        $this->assertStringNotContainsString('x-html', $html, 'nome de categoria e renderizado com x-text, nunca x-html');
     }
 }

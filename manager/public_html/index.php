@@ -95,6 +95,10 @@ $dispatcher->add_route("GET",  "/usuarios", "function:basic_redir", $authGuard, 
 $dispatcher->add_route("GET",  "/produtos", "products_controller:index",  $authGuard, $params);
 $dispatcher->add_route("POST", "/produtos", "products_controller:action", $authGuard, $params);
 
+// CRUD de categorias do modal de /produtos. Responde JSON (nao redireciona):
+// o pop-up atualiza a lista sem recarregar a pagina.
+$dispatcher->add_route("POST", "/produtos/categorias", "products_controller:categories_action", $authGuard, $params);
+
 // Pedidos (requer autenticação)
 $dispatcher->add_route("GET",  "/pedidos",         "orders_controller:index", $authGuard, $params);
 $dispatcher->add_route("GET",  "/pedidos/exportar", "orders_controller:export", $authGuard, $params);
