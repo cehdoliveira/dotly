@@ -5,15 +5,17 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Cobre MercadoPagoGateway::verifyWebhook()/extractChargeId()/extractPaidAmountCents()
- * direto — sem rede, sem banco. Estende TestCase puro (nao DBTestCase).
+ * Cobre MercadoPagoGateway::verifyWebhook()/extractChargeId()/extractPaidAmountCents().
+ * Estende TestCase puro (nao DBTestCase, nao precisa de $this->con) mas
+ * verifyWebhook() agora le a credencial via GatewayCredentials::get() (plano
+ * 026), que consulta a linha real 'mercadopago' em payment_gateways — entao os
+ * testes que dependem de uma assinatura VALIDA tocam o banco atraves do
+ * setUp()/tearDown() abaixo.
  *
- * verifyWebhook() exige MP_WEBHOOK_SECRET configurado (fail-closed sem ele). O
- * kernel.php.example nao define essa constante, entao os casos que dependem de
- * uma assinatura VALIDA viram skip quando o ambiente nao tem o valor real —
- * mesmo padrao usado para PAGBANK_TOKEN em WebhookIdempotencyTest e
- * PagBankGatewayTest. Nunca hardcodar o segredo: o hash esperado sempre usa
- * constant('MP_WEBHOOK_SECRET').
+ * Credencial de teste fixa semeada no setUp() via GatewayCredentials::save()
+ * e restaurada no tearDown() — nunca lida de kernel.php (plano 026 tirou as
+ * credenciais de gateway de la). Antes do plano 026 estes testes skipavam
+ * quando MP_WEBHOOK_SECRET nao estava configurado; agora sempre rodam.
  *
  * Investigacao do plano 026 (data.id do manifest): a documentacao oficial do
  * Mercado Pago (docs de "Webhooks" / "payment-notifications" — verificado em
@@ -25,13 +27,43 @@ use PHPUnit\Framework\TestCase;
  */
 final class MercadoPagoGatewayTest extends TestCase
 {
-    private function mpSecretOrSkip(): string
-    {
-        if (!defined('MP_WEBHOOK_SECRET') || (string)constant('MP_WEBHOOK_SECRET') === '') {
-            $this->markTestSkipped('MP_WEBHOOK_SECRET nao configurado neste ambiente.');
-        }
+    private const TEST_SECRET = 'test_mp_webhook_secret_plano026';
 
-        return (string)constant('MP_WEBHOOK_SECRET');
+    private ?string $originalCredentialsEnc = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        GatewayCredentials::resetCache();
+
+        $model = new payment_gateways_model();
+        $model->set_field([" credentials_enc "]);
+        $model->set_filter([" active = 'yes' ", " slug = ? "], ['mercadopago']);
+        $model->set_paginate([1]);
+        $model->load_data(false);
+        $this->originalCredentialsEnc = $model->data[0]['credentials_enc'] ?? null;
+
+        GatewayCredentials::save('mercadopago', [
+            'access_token'   => 'test_mp_access_token_plano026',
+            'webhook_secret' => self::TEST_SECRET,
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        $model = new payment_gateways_model();
+        $model->execute_raw_prepared(
+            "UPDATE payment_gateways SET credentials_enc = ? WHERE slug = ?",
+            [$this->originalCredentialsEnc, 'mercadopago']
+        );
+
+        GatewayCredentials::resetCache();
+        parent::tearDown();
+    }
+
+    private function mpSecret(): string
+    {
+        return self::TEST_SECRET;
     }
 
     private function manifestSignature(string $secret, string $dataId, string $requestId, string $ts): string
@@ -43,7 +75,7 @@ final class MercadoPagoGatewayTest extends TestCase
 
     public function testVerifyWebhookValidSignaturePasses(): void
     {
-        $secret = $this->mpSecretOrSkip();
+        $secret = $this->mpSecret();
 
         $rawBody = '{"data":{"id":"123"}}';
         $ts = '1700000000';
@@ -62,7 +94,7 @@ final class MercadoPagoGatewayTest extends TestCase
 
     public function testVerifyWebhookTamperedV1Fails(): void
     {
-        $secret = $this->mpSecretOrSkip();
+        $secret = $this->mpSecret();
 
         $rawBody = '{"data":{"id":"123"}}';
         $ts = '1700000000';
@@ -107,6 +139,33 @@ final class MercadoPagoGatewayTest extends TestCase
         $this->assertFalse($result);
     }
 
+    /**
+     * Achado da revisao do plano 026 (Cobertura de Testes): antes do plano,
+     * "sem credencial" era um estado so alcancavel em kernel.php mal
+     * configurado; agora o admin pode apagar a credencial em runtime pelo
+     * pop-up "Remover credenciais" em /config, entao o caminho fail-closed de
+     * verifyWebhook() precisa de cobertura real, nao so teorica.
+     */
+    public function testVerifyWebhookWithClearedCredentialFailsClosed(): void
+    {
+        GatewayCredentials::clear('mercadopago');
+
+        $secret = self::TEST_SECRET;
+        $rawBody = '{"data":{"id":"123"}}';
+        $ts = '1700000000';
+        $requestId = 'req-1';
+        $v1 = $this->manifestSignature($secret, '123', $requestId, $ts);
+
+        $gateway = new MercadoPagoGateway();
+
+        $result = $gateway->verifyWebhook($rawBody, [
+            'x-signature'  => "ts={$ts},v1={$v1}",
+            'x-request-id' => $requestId,
+        ]);
+
+        $this->assertFalse($result, 'sem webhook_secret cadastrado, o webhook deve ser recusado mesmo com a assinatura que seria valida');
+    }
+
     public function testVerifyWebhookMalformedSignatureHeaderFails(): void
     {
         $gateway = new MercadoPagoGateway();
@@ -128,7 +187,7 @@ final class MercadoPagoGatewayTest extends TestCase
      */
     public function testVerifyWebhookBodyWithoutDataIdAndNoQueryFails(): void
     {
-        $secret = $this->mpSecretOrSkip();
+        $secret = $this->mpSecret();
 
         $rawBody = '{"type":"payment"}';
         $ts = '1700000000';
@@ -162,7 +221,7 @@ final class MercadoPagoGatewayTest extends TestCase
      */
     public function testVerifyWebhookValidSignatureWithDataIdOnlyInQueryPasses(): void
     {
-        $secret = $this->mpSecretOrSkip();
+        $secret = $this->mpSecret();
 
         $rawBody = '{"type":"payment"}';
         $ts = '1700000000';

@@ -8,8 +8,9 @@
  * Verificado contra a documentacao publica ("Como usar o Checkout da InfinitePay")
  * em julho/2026. Sem SDK — cURL nativo apenas.
  *
- * Credenciais: INFINITEPAY_HANDLE (kernel.php, fail-closed se vazio). Sem token de
- * autenticacao no header — o `handle` identifica o recebedor.
+ * Credenciais: payment_gateways.credentials_enc (cadastrado em /config, ver
+ * GatewayCredentials), campo handle. Sem token de autenticacao no header — o
+ * `handle` identifica o recebedor.
  */
 class InfinitePayGateway implements PixGateway
 {
@@ -19,17 +20,17 @@ class InfinitePayGateway implements PixGateway
 
     private function handle(): string
     {
-        return defined('INFINITEPAY_HANDLE') ? (string)constant('INFINITEPAY_HANDLE') : '';
+        return GatewayCredentials::get('infinitepay')['handle'] ?? '';
     }
 
     public function createCharge(array $order, array $items): array
     {
         // Fail-closed: sem handle configurado nao ha recebedor — aborta antes de
         // qualquer HTTP. O throw fica aqui (nao em handle()) para que
-        // buildChargeBody() seja testavel sem INFINITEPAY_HANDLE definido, ex.:
-        // CI rodando com kernel.php.example (handle vazio).
+        // buildChargeBody() seja testavel sem credencial cadastrada, ex.:
+        // CI rodando sem credencial em payment_gateways.credentials_enc.
         if ($this->handle() === '') {
-            throw new RuntimeException('INFINITEPAY_HANDLE nao configurado');
+            throw new RuntimeException('handle da InfinitePay nao cadastrado em /config');
         }
 
         $body = $this->buildChargeBody($order, $items);
@@ -223,9 +224,9 @@ class InfinitePayGateway implements PixGateway
         // Checa primeiro se ESTE corpo tem o que precisa pra reconfirmar — fato
         // permanente do request, independente de config. So checa handle() (config,
         // pode mudar) quando ja sabemos que faria sentido tentar a chamada de rede
-        // de verdade — assim um ambiente sem INFINITEPAY_HANDLE configurado (ex.:
-        // kernel.php.example, usado em CI) nao vira "retriable" para corpos que
-        // seriam fail-closed de qualquer forma.
+        // de verdade — assim um ambiente sem credencial cadastrada (ex.: CI, sem
+        // linha em payment_gateways.credentials_enc) nao vira "retriable" para
+        // corpos que seriam fail-closed de qualquer forma.
         $payload = json_decode($rawBody, true);
         if (!is_array($payload)) {
             return $notPaid;
@@ -245,7 +246,7 @@ class InfinitePayGateway implements PixGateway
             // Config ausente e um problema operacional que pode ser corrigido a
             // qualquer momento — retriable, para a InfinitePay tentar de novo depois
             // (em vez de perder o webhook pra sempre enquanto ninguem notou).
-            Logger::getInstance()->warning('InfinitePay payment_check: INFINITEPAY_HANDLE nao configurado (fail-closed)');
+            Logger::getInstance()->warning('InfinitePay payment_check: handle nao cadastrado em /config (fail-closed)');
             return $indeterminate;
         }
 

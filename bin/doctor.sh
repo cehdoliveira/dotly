@@ -25,12 +25,14 @@
 #   Locais (sempre rodam): kernel.php presente, placeholder de segredo
 #     residual, docker/.env presente, placeholder de host no nginx,
 #     ALLOWED_HOSTS/CANONICAL_URL vazios, DB_NAME/DB_USER divergentes do
-#     docker/.env, nenhum token de gateway preenchido, SESSION_LIFETIME
-#     ausente, sync guard lib/model (bin/check-shared-sync.sh).
+#     docker/.env, APP_ENCRYPTION_KEY presente/identica/valida nos dois
+#     kernels (plano 026), SESSION_LIFETIME ausente, sync guard lib/model
+#     (bin/check-shared-sync.sh).
 #   Runtime (puladas com --skip-docker ou se o container nao estiver
 #     rodando): extensoes PHP obrigatorias/opcionais, banco alcancavel, fuso
 #     do MySQL vs PHP, migrations_log com falha, gateway habilitado sem
-#     credencial, UPLOAD_DIR gravavel.
+#     credencial cadastrada em payment_gateways.credentials_enc (plano 026),
+#     UPLOAD_DIR gravavel.
 #
 # Uso:
 #   bin/doctor.sh                  # tudo (local + runtime se o container 'app' estiver de pe)
@@ -188,23 +190,49 @@ if [ "$SITE_KERNEL_OK" -eq 1 ] && [ -f "$ENV_FILE" ]; then
     fi
 fi
 
-# Nenhum token de gateway preenchido — checkout vai recusar todo PSP. So
-# checa presenca, nunca validade. Defaults vazios aqui para as variaveis
-# ficarem definidas mesmo se o kernel do site estiver ausente (usadas de novo
-# nas checagens de runtime, mais abaixo).
-MP_TOKEN=""
-PAGBANK_TOKEN=""
-INFINITEPAY_HANDLE=""
-if [ "$SITE_KERNEL_OK" -eq 1 ]; then
-    MP_TOKEN="$(kernel_const "$SITE_KERNEL" MP_ACCESS_TOKEN)"
-    PAGBANK_TOKEN="$(kernel_const "$SITE_KERNEL" PAGBANK_TOKEN)"
-    INFINITEPAY_HANDLE="$(kernel_const "$SITE_KERNEL" INFINITEPAY_HANDLE)"
-    if [ -z "$MP_TOKEN" ] && [ -z "$PAGBANK_TOKEN" ] && [ -z "$INFINITEPAY_HANDLE" ]; then
-        warn "nenhum token de gateway preenchido no kernel do site (MP_ACCESS_TOKEN/PAGBANK_TOKEN/INFINITEPAY_HANDLE) — checkout vai recusar todo PSP"
-    else
-        ok "pelo menos um token de gateway preenchido no kernel do site"
+# APP_ENCRYPTION_KEY (plano 026): cifra as credenciais dos gateways de
+# pagamento em payment_gateways.credentials_enc. PRECISA ser IDENTICA nos dois
+# kernels — o manager cifra ao salvar em /config, o site decifra ao cobrar.
+# Nunca imprime o valor, so compara hashes (sha256, 16 chars) e o tamanho
+# decodificado.
+APP_KEY_PLACEHOLDER='VFJPUVVFX0VTVEFfQ0hBVkVfREVfREVTRU5WT0xWSU0='
+check_app_encryption_key() {
+    local site_key manager_key
+    site_key=""
+    manager_key=""
+    [ "$SITE_KERNEL_OK" -eq 1 ] && site_key="$(kernel_const "$SITE_KERNEL" APP_ENCRYPTION_KEY)"
+    [ "$MANAGER_KERNEL_OK" -eq 1 ] && manager_key="$(kernel_const "$MANAGER_KERNEL" APP_ENCRYPTION_KEY)"
+
+    if [ "$SITE_KERNEL_OK" -eq 1 ] && [ -z "$site_key" ]; then
+        fail "APP_ENCRYPTION_KEY ausente no kernel do site — credenciais de gateway cifradas ficam ilegiveis"
     fi
-fi
+    if [ "$MANAGER_KERNEL_OK" -eq 1 ] && [ -z "$manager_key" ]; then
+        fail "APP_ENCRYPTION_KEY ausente no kernel do manager — /config nao consegue cifrar credenciais de gateway"
+    fi
+    if [ "$SITE_KERNEL_OK" -eq 1 ] && [ -n "$site_key" ] && [ "$site_key" = "$APP_KEY_PLACEHOLDER" ]; then
+        fail "APP_ENCRYPTION_KEY do site ainda e o placeholder de desenvolvimento — gere uma chave real (ver comentario no kernel.php.example)"
+    fi
+    if [ "$MANAGER_KERNEL_OK" -eq 1 ] && [ -n "$manager_key" ] && [ "$manager_key" = "$APP_KEY_PLACEHOLDER" ]; then
+        fail "APP_ENCRYPTION_KEY do manager ainda e o placeholder de desenvolvimento — gere uma chave real (ver comentario no kernel.php.example)"
+    fi
+
+    if [ -n "$site_key" ] && [ -n "$manager_key" ] && [ "$site_key" != "$APP_KEY_PLACEHOLDER" ] && [ "$manager_key" != "$APP_KEY_PLACEHOLDER" ]; then
+        local site_hash manager_hash site_len manager_len
+        site_hash="$(printf '%s' "$site_key" | sha256sum | cut -c1-16)"
+        manager_hash="$(printf '%s' "$manager_key" | sha256sum | cut -c1-16)"
+        site_len="$(printf '%s' "$site_key" | base64 -d 2>/dev/null | wc -c)"
+        manager_len="$(printf '%s' "$manager_key" | base64 -d 2>/dev/null | wc -c)"
+
+        if [ "$site_hash" != "$manager_hash" ]; then
+            fail "APP_ENCRYPTION_KEY diverge entre manager e site — o site nao conseguira decifrar as credenciais dos gateways"
+        elif [ "$site_len" -ne 32 ] || [ "$manager_len" -ne 32 ]; then
+            fail "APP_ENCRYPTION_KEY nao decodifica para 32 bytes (esperado base64 de uma chave AES-256)"
+        else
+            ok "APP_ENCRYPTION_KEY presente, identica e valida (32 bytes) nos dois kernels"
+        fi
+    fi
+}
+check_app_encryption_key
 
 # SESSION_LIFETIME ausente (so relevante depois de plans/014).
 for pair in "$SITE_KERNEL:site:$SITE_KERNEL_OK" "$MANAGER_KERNEL:manager:$MANAGER_KERNEL_OK"; do
@@ -387,20 +415,34 @@ if [ "$RUN_DOCKER_CHECKS" -eq 1 ]; then
             fail "nenhum gateway habilitado em payment_gateways (active='yes' AND enabled='yes') — checkout vai falhar para todo comprador"
         else
             ok "gateway(s) habilitado(s) em payment_gateways: $ENABLED_GATEWAYS"
-            # Gateway habilitado sem credencial correspondente no kernel.
-            for slug in $(echo "$ENABLED_GATEWAYS" | tr ',' ' '); do
-                case "$slug" in
-                    mercadopago)
-                        [ -z "$MP_TOKEN" ] && warn "gateway 'mercadopago' habilitado mas MP_ACCESS_TOKEN vazio no kernel do site — checkout falha so para esse PSP"
-                        ;;
-                    pagbank)
-                        [ -z "$PAGBANK_TOKEN" ] && warn "gateway 'pagbank' habilitado mas PAGBANK_TOKEN vazio no kernel do site — checkout falha so para esse PSP"
-                        ;;
-                    infinitepay)
-                        [ -z "$INFINITEPAY_HANDLE" ] && warn "gateway 'infinitepay' habilitado mas INFINITEPAY_HANDLE vazio no kernel do site — checkout falha so para esse PSP"
-                        ;;
-                esac
-            done
+        fi
+
+        # Gateway habilitado sem NENHUMA credencial cadastrada (plano 026):
+        # credentials_enc NULL. So o fato de ter algo cifrado — nao decifra
+        # (SOMENTE LEITURA) nem confere se todos os campos required estao
+        # presentes, isso e GatewayCredentials::isComplete() em runtime real.
+        NO_CRED_GATEWAYS="$(docker exec "$CONTAINER" php -r '
+            $_SERVER["DOCUMENT_ROOT"] = "/var/www/app/site/public_html/";
+            $_SERVER["HTTP_HOST"] = "";
+            require "/var/www/app/site/app/inc/kernel.php";
+            try {
+                $pdo = new PDO(
+                    "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+                    DB_USER,
+                    DB_PASS,
+                    [PDO::ATTR_TIMEOUT => 3]
+                );
+                $stmt = $pdo->query("SELECT slug FROM payment_gateways WHERE active=\x27yes\x27 AND enabled=\x27yes\x27 AND credentials_enc IS NULL");
+                $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                echo implode(",", $rows);
+            } catch (Throwable $e) {
+                echo "__ERROR__";
+            }
+        ' 2>/dev/null)"
+        if [ "$NO_CRED_GATEWAYS" = "__ERROR__" ]; then
+            warn "nao foi possivel checar credentials_enc dos gateways habilitados (coluna ausente? rode as migrations pendentes)"
+        elif [ -n "$NO_CRED_GATEWAYS" ]; then
+            warn "gateway(s) habilitado(s) sem NENHUMA credencial cadastrada em /config: $NO_CRED_GATEWAYS — checkout falha so para esse(s) PSP (GatewayRouter ja os tira do sorteio)"
         fi
     fi
 

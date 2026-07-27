@@ -8,8 +8,9 @@
  * "Confirmar autenticidade da notificacao") em julho/2026. Sem SDK — cURL
  * nativo apenas.
  *
- * Credenciais: PAGBANK_API_BASE (ex.: https://sandbox.api.pagseguro.com em
- * teste), PAGBANK_TOKEN (kernel.php, fail-closed se vazio).
+ * Credenciais: payment_gateways.credentials_enc (cadastrado em /config, ver
+ * GatewayCredentials), campos api_base (ex.: https://sandbox.api.pagseguro.com
+ * em teste) e token.
  *
  * Nota sobre fetchStatus(): a doc oficial nao detalha o corpo de resposta de
  * GET /orders/{id}, e relatos da comunidade PagBank indicam que a consulta
@@ -23,18 +24,18 @@ class PagBankGateway implements PixGateway
 
     private function apiBase(): string
     {
-        $base = defined('PAGBANK_API_BASE') ? (string)constant('PAGBANK_API_BASE') : '';
+        $base = GatewayCredentials::get('pagbank')['api_base'] ?? '';
         if ($base === '') {
-            throw new RuntimeException('PAGBANK_API_BASE nao configurado');
+            throw new RuntimeException('credencial api_base do PagBank nao cadastrada em /config');
         }
         return rtrim($base, '/');
     }
 
     private function token(): string
     {
-        $token = defined('PAGBANK_TOKEN') ? (string)constant('PAGBANK_TOKEN') : '';
+        $token = GatewayCredentials::get('pagbank')['token'] ?? '';
         if ($token === '') {
-            throw new RuntimeException('PAGBANK_TOKEN nao configurado');
+            throw new RuntimeException('credencial token do PagBank nao cadastrada em /config');
         }
         return $token;
     }
@@ -112,9 +113,9 @@ class PagBankGateway implements PixGateway
 
     public function verifyWebhook(string $rawBody, array $headers, array $query = []): bool
     {
-        $token = defined('PAGBANK_TOKEN') ? (string)constant('PAGBANK_TOKEN') : '';
+        $token = GatewayCredentials::get('pagbank')['token'] ?? '';
         if ($token === '') {
-            Logger::getInstance()->error('PAGBANK_TOKEN nao configurado — recusando webhook');
+            Logger::getInstance()->error('token do PagBank nao cadastrado — recusando webhook');
             return false;
         }
 

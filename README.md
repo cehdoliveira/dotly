@@ -42,9 +42,12 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
    - Copie `logo.svg` e `favicon.svg` da marca para
      `site/public_html/assets/img/` e `manager/public_html/assets/img/`
      (sobrescrevem os defaults do vendor).
-   - Preencha as constantes dos gateways de pagamento (`MP_ACCESS_TOKEN`,
-     `PAGBANK_TOKEN`, `INFINITEPAY_HANDLE`, etc.) — são fail-closed até
-     preenchidas.
+   - Cadastre as credenciais dos gateways de pagamento (Access Token/Webhook
+     Secret do Mercado Pago, URL base/Token do PagBank, Handle da InfinitePay)
+     no **manager**, em `/config` → "Gateways de Pagamento" — não ficam mais
+     no `kernel.php`, são cifradas em `payment_gateways.credentials_enc` (ver
+     `APP_ENCRYPTION_KEY` abaixo). Gateway sem credencial completa não entra
+     no sorteio do `GatewayRouter`, mesmo habilitado.
 4. Suba o stack:
    ```bash
    docker compose -f docker/docker-compose.yml up -d --build
@@ -57,9 +60,11 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
    ```bash
    bash bin/doctor.sh
    ```
-   Ele checa kernel, placeholders de segredo, extensões PHP, banco, migrations, fuso e
-   gateways habilitados. `[FALHA]` = a marca vai se comportar errado; `[AVISO]` =
-   degradação conhecida (ex.: sem `rdkafka`, e-mail de admin não é enviado).
+   Ele checa kernel, placeholders de segredo, `APP_ENCRYPTION_KEY` (presente,
+   sem placeholder, idêntica nos dois kernels), extensões PHP, banco,
+   migrations, fuso e gateways habilitados sem credencial cadastrada.
+   `[FALHA]` = a marca vai se comportar errado; `[AVISO]` = degradação
+   conhecida (ex.: sem `rdkafka`, e-mail de admin não é enviado).
 6. Commite (nova marca instanciada) e faça deploy.
 
 ### O que o script substitui automaticamente
@@ -67,6 +72,7 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
 | Grupo | Target | Descrição |
 |-------|--------|-----------|
 | 1. kernel.php (site + manager) | 8 constantes por env | `mail_from_name`, `cAppKey`, `cTitle`, `ALLOWED_HOSTS`, `SITE_CANONICAL_URL` / `MANAGER_CANONICAL_URL`, `REDIS_PREFIX`, `KAFKA_TOPIC_EMAIL`, `KAFKA_CONSUMER_GROUP` — derivadas do `--name` e das URLs |
+| 1b. `APP_ENCRYPTION_KEY` | `site/` e `manager/` `kernel.php` | Chave AES-256 aleatória (não derivada do `--name`) gerada **uma vez** e gravada **idêntica** nos dois kernels — cifra as credenciais dos gateways em `payment_gateways.credentials_enc`. Nunca aparece no output do script. |
 | 2. Cor de marca | `site/` e `manager/` `main.css` + 2 templates de email | `#2e2b6e` e `#5855b0` (case-insensitive) trocadas pelo `--primary-color` |
 | 3. nginx | `docker/interface/default.conf` | Placeholders `__SITE_HOSTS__` e `__MANAGER_HOSTS__` substituídos pelos hosts reais da marca |
 | 4. Admin seed | `migrations/002_create_table_users.sql` | `admin@example.com` e `Admin` trocados se `--admin-email` / `--admin-name` forem passados |
@@ -78,12 +84,23 @@ Para iniciar um novo projeto a partir deste whitelabel, rode o script
 | `DB_PASS` | `site/` e `manager/` `kernel.php` | Placeholder `SUA_SENHA_AQUI` — preencher com credencial real |
 | SMTP creds | `site/` e `manager/` `kernel.php` | `mail_from_mail`, `mail_from_host`, `mail_from_port`, `mail_from_user`, `mail_from_pwd` |
 | Logo e favicon | `site/` e `manager/` `public_html/assets/img/` | Copiar `logo.svg` + `favicon.svg` sobre os defaults |
-| Gateways de pagamento | `site/` e `manager/` `kernel.php` | `MP_ACCESS_TOKEN`, `PAGBANK_TOKEN`, `INFINITEPAY_HANDLE` — fail-closed até preenchidas |
+| Gateways de pagamento | manager, `/config` → "Gateways de Pagamento" | Cifradas em `payment_gateways.credentials_enc` (ver `APP_ENCRYPTION_KEY` acima) — fail-closed até preenchidas, gateway incompleto não entra no sorteio |
 | `MYSQL_DATABASE`, `MYSQL_USER` | `docker/.env` | O script sugere `db_${SLUG}` e `user_${SLUG}` no output; replicar no `.env` |
 
 O script nunca inventa segredos: `DB_PASS`, `mail_from_pwd` e demais ficam como
 placeholder. `DB_NAME` e `DB_USER` no kernel não são substituídos — o operador
-decide os valores.
+decide os valores. `APP_ENCRYPTION_KEY` é a exceção: é gerada pelo script (não
+um placeholder), porque sem ela o manager não teria como cifrar nenhuma
+credencial de gateway.
+
+**Migrando uma marca que já tinha credenciais de gateway no `kernel.php`
+antes deste mecanismo** (`bin/import-gateway-keys.php`): 1) adicione
+`APP_ENCRYPTION_KEY` (mesmo valor) nos dois kernels do servidor, sem remover
+ainda as constantes antigas de gateway; 2) faça o deploy e rode as migrations
+pendentes; 3) rode `bin/import-gateway-keys.php`; 4) confira em `/config` que
+os 3 gateways aparecem como "Configuradas"; 5) só então apague
+`MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAGBANK_API_BASE`, `PAGBANK_TOKEN` e
+`INFINITEPAY_HANDLE` dos kernels do servidor.
 
 **Idempotência:** rodar o script 2x com a mesma marca é seguro — o `sed` casa o
 placeholder literal, que some após o primeiro run. Em `kernel.php` o `cp`
@@ -231,6 +248,16 @@ bin/init-whitelabel.sh \
   reconfirmação — estoque é movimentado só no checkout, nunca no webhook.
   Não "consertar" o `return true` adicionando validação de assinatura que o
   PSP não oferece.
+- **Credenciais de gateway de pagamento vivem cifradas no banco, não no
+  `kernel.php`.** `payment_gateways.credentials_enc` guarda um JSON cifrado
+  (AES-256-GCM, `Crypto`/`GatewayCredentials`) com os campos de cada PSP,
+  editável pelo dono da loja em `/config` → "Gateways de Pagamento". A chave
+  de cifra (`APP_ENCRYPTION_KEY`) continua no `kernel.php` — **dos dois**
+  ambientes, com o **mesmo valor** (o manager cifra ao salvar, o site decifra
+  ao cobrar; `bin/doctor.sh` falha se divergir). `GatewayRouter::pick()` tira
+  do sorteio qualquer gateway habilitado sem credencial completa, mesmo que
+  isso esvazie o conjunto — é o único filtro da classe que pode travar a
+  venda, de propósito.
 - **Referência a migration em comentário usa o NOME do arquivo**, nunca o número solto
   (`migrations/010_create_table_pix_charges.sql`, não "migration 010"). O squash de
   migrations renumerou tudo uma vez e os números soltos passaram a apontar para arquivos

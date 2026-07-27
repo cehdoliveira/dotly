@@ -7,14 +7,15 @@ declare(strict_types=1);
  * (gravar transaction_nsu do PagBank a partir do payload do webhook).
  *
  * NAO exercitado via processEvent() de ponta a ponta: alcancar esse bloco
- * exige passar por fetchStatus() do PagBank (chamada de rede real contra a
- * API), que so acontece depois de PAGBANK_TOKEN configurado — ausente neste
- * ambiente (kernel.php.example, mesma limitacao ja documentada no docblock de
- * WebhookIdempotencyTest para MP_WEBHOOK_SECRET/PAGBANK_TOKEN/INFINITEPAY_HANDLE).
- * Sem token, PagBankGateway::fetchStatus() lanca RuntimeException antes de
- * qualquer chamada HTTP, e processEvent() responde 500 — nunca alcanca o
- * bloco novo. Simular a resposta do PagBank exigiria injetar um double na
- * classe de producao, o que o plano proibe (STOP condition).
+ * exige passar por fetchStatus() do PagBank, que faz uma chamada de rede REAL
+ * contra a API do PSP — indisponivel neste ambiente de teste mesmo com uma
+ * credencial cadastrada via GatewayCredentials (plano 026; mesma limitacao ja
+ * documentada no docblock de WebhookIdempotencyTest). Sem credencial,
+ * PagBankGateway::fetchStatus() lanca RuntimeException antes de qualquer
+ * chamada HTTP; com credencial, a chamada chegaria a rede de verdade — nos
+ * dois casos processEvent() nunca alcanca o bloco novo neste ambiente.
+ * Simular a resposta do PagBank exigiria injetar um double na classe de
+ * producao, o que o plano proibe (STOP condition).
  *
  * Em vez disso, este teste replica EXATAMENTE as linhas novas de
  * processEvent() (mesma tecnica ja usada em

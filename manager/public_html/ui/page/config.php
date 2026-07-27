@@ -274,6 +274,7 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                                     <th>Modo</th>
                                     <th>Faturamento do mês</th>
                                     <th>% de utilização</th>
+                                    <th>Credenciais</th>
                                     <th>Habilitado</th>
                                     <th>Limite mensal</th>
                                     <th>Teto por pedido</th>
@@ -286,6 +287,7 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                                     $usagePct       = (float)($g['usage_pct'] ?? 0);
                                     $usageBadge     = $usagePct >= 100 ? 'badge-removed' : ($usagePct >= 80 ? 'badge-inactive' : 'badge-active');
                                     $maxOrderCents  = $g['max_order_cents'] ?? null;
+                                    $credComplete   = (bool)($g['cred_complete'] ?? false);
                                 ?>
                                     <tr>
                                         <td><?php echo htmlspecialchars($g['name'] ?? '—', ENT_QUOTES, 'UTF-8'); ?></td>
@@ -294,6 +296,18 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                                         <td style="font-size:0.82rem;">R$ <?php echo number_format((int)($g['mtd_cents'] ?? 0) / 100, 2, ',', '.'); ?></td>
                                         <td>
                                             <span class="user-badge <?php echo $usageBadge; ?>"><?php echo number_format($usagePct, 1, ',', '.'); ?>%</span>
+                                        </td>
+                                        <td>
+                                            <?php if ($credComplete): ?>
+                                                <span class="user-badge badge-active">Configuradas</span>
+                                            <?php else: ?>
+                                                <span class="user-badge badge-removed">Faltando</span>
+                                            <?php endif; ?>
+                                            <button type="button" class="btn btn-sm btn-action-edit ms-1"
+                                                    title="Editar credenciais"
+                                                    @click="openGatewayCreds(<?php echo $gatewayIdx; ?>)">
+                                                <i class="bi bi-key" aria-hidden="true"></i>
+                                            </button>
                                         </td>
                                         <td>
                                             <?php if (($g['enabled'] ?? 'no') === 'yes'): ?>
@@ -311,8 +325,10 @@ foreach ($senderSettings as $senderKey => $senderValue) {
                                                 <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
                                                 <input type="hidden" name="action" value="gateway">
                                                 <input type="hidden" name="idx" value="<?php echo $gatewayIdx; ?>">
-                                                <input type="checkbox" name="enabled" value="yes" class="form-check-input" title="Habilitado"
-                                                    <?php echo ($g['enabled'] ?? 'no') === 'yes' ? 'checked' : ''; ?>>
+                                                <input type="checkbox" name="enabled" value="yes" class="form-check-input"
+                                                    title="<?php echo $credComplete ? 'Habilitado' : 'Cadastre as credenciais para habilitar'; ?>"
+                                                    <?php echo ($g['enabled'] ?? 'no') === 'yes' ? 'checked' : ''; ?>
+                                                    <?php echo $credComplete ? '' : 'disabled'; ?>>
                                                 <input type="text" name="monthly_limit_cents" class="form-control form-control-sm" style="width:8rem;"
                                                     placeholder="R$ 0,00"
                                                     value="<?php echo htmlspecialchars(number_format((int)($g['monthly_limit_cents'] ?? 0) / 100, 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>">
@@ -469,6 +485,83 @@ foreach ($senderSettings as $senderKey => $senderValue) {
         </div>
 
     </main>
+
+    <!-- Modais de credenciais: um por gateway. Ficam fora de .manager-content
+         (a animacao manager-fade-in cria stacking context e prenderia o modal
+         atras do .modal-backdrop) e dentro de .manager-layout, para seguirem
+         no escopo do x-data. Mesmo padrao de ui/page/products.php. -->
+    <?php foreach ($gateways as $g):
+        $credGatewayIdx = (int)$g['idx'];
+        $credSchema     = $g['cred_schema'] ?? [];
+        $credMasked     = $g['cred_masked'] ?? [];
+        if (empty($credSchema)) {
+            continue;
+        }
+        // json_encode + htmlspecialchars (mesmo padrao de $jsName acima, para
+        // openEdit/confirmToggle/confirmRemove): passa a string pronta como
+        // literal JS para dentro do atributo Alpine, em vez de interpolar PHP
+        // cru entre aspas simples manuais (achado da revisao do plano 026).
+        $credJsName = htmlspecialchars(json_encode((string)$g['name']), ENT_QUOTES, 'UTF-8');
+    ?>
+    <div id="gatewayCredsModal<?php echo $credGatewayIdx; ?>" class="modal fade" tabindex="-1"
+         aria-labelledby="gatewayCredsModalLabel<?php echo $credGatewayIdx; ?>" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background:var(--surface);border:1px solid var(--border);border-radius:0.5rem;">
+                <form method="POST" action="<?php echo htmlspecialchars($GLOBALS['config_url'], ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off">
+                    <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
+                    <input type="hidden" name="action" value="credenciais">
+                    <input type="hidden" name="slug" value="<?php echo htmlspecialchars((string)$g['slug'], ENT_QUOTES, 'UTF-8'); ?>">
+
+                    <div class="modal-header" style="border-color:var(--border);padding:1rem 1.25rem 0.75rem;">
+                        <h5 class="modal-title" id="gatewayCredsModalLabel<?php echo $credGatewayIdx; ?>"
+                            style="font-size:0.9rem;font-weight:700;color:var(--text);">
+                            <i class="bi bi-key me-2" style="color:var(--accent)" aria-hidden="true"></i>Credenciais — <?php echo htmlspecialchars((string)$g['name'], ENT_QUOTES, 'UTF-8'); ?>
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+
+                    <div class="modal-body" style="padding:1.25rem;">
+                        <?php foreach ($credSchema as $credField => $credDef):
+                            $credInputId = 'cred-' . $credGatewayIdx . '-' . htmlspecialchars($credField, ENT_QUOTES, 'UTF-8');
+                        ?>
+                            <div class="mb-3">
+                                <label class="form-label" for="<?php echo $credInputId; ?>" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">
+                                    <?php echo htmlspecialchars($credDef['label'], ENT_QUOTES, 'UTF-8'); ?>
+                                </label>
+                                <input type="<?php echo $credDef['secret'] ? 'password' : 'text'; ?>"
+                                       id="<?php echo $credInputId; ?>"
+                                       name="cred_<?php echo htmlspecialchars($credField, ENT_QUOTES, 'UTF-8'); ?>"
+                                       class="form-control"
+                                       autocomplete="new-password"
+                                       placeholder="<?php echo htmlspecialchars(($credMasked[$credField] ?? '') !== '' ? (string)$credMasked[$credField] : 'não cadastrado', ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        <?php endforeach; ?>
+                        <p class="mb-0" style="font-size:0.78rem;color:var(--text-muted);">
+                            Campo deixado em branco mantém o valor já cadastrado.
+                        </p>
+                    </div>
+
+                    <div class="modal-footer" style="border-color:var(--border);padding:0.75rem 1.25rem;justify-content:space-between;">
+                        <div></div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+                        </div>
+                    </div>
+                </form>
+                <!-- form separado, FORA do form de cima (HTML nao aninha form) -->
+                <form method="POST" action="<?php echo htmlspecialchars($GLOBALS['config_url'], ENT_QUOTES, 'UTF-8'); ?>"
+                      style="padding:0 1.25rem 1rem;"
+                      @submit.prevent="confirmClearCreds($event.target, <?php echo $credJsName; ?>)">
+                    <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
+                    <input type="hidden" name="action" value="credenciais-remover">
+                    <input type="hidden" name="slug" value="<?php echo htmlspecialchars((string)$g['slug'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <button type="submit" class="btn btn-sm btn-link text-danger p-0">Remover credenciais</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
 
     <!-- Modal de edição de usuário -->
     <div id="editUserModal" class="modal fade" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">

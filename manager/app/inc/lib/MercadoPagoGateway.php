@@ -6,7 +6,8 @@
  * Verificado contra a documentacao oficial (Checkout API / "Integrar Pix", referencia
  * "Create payment") em julho/2026. Sem SDK — cURL nativo apenas.
  *
- * Credenciais: MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET (kernel.php, fail-closed se vazias).
+ * Credenciais: payment_gateways.credentials_enc (cadastrado em /config, ver
+ * GatewayCredentials), campos access_token/webhook_secret.
  */
 class MercadoPagoGateway implements PixGateway
 {
@@ -16,9 +17,9 @@ class MercadoPagoGateway implements PixGateway
 
     private function accessToken(): string
     {
-        $token = defined('MP_ACCESS_TOKEN') ? (string)constant('MP_ACCESS_TOKEN') : '';
+        $token = GatewayCredentials::get('mercadopago')['access_token'] ?? '';
         if ($token === '') {
-            throw new RuntimeException('MP_ACCESS_TOKEN nao configurado');
+            throw new RuntimeException('credencial access_token do Mercado Pago nao cadastrada em /config');
         }
         return $token;
     }
@@ -84,9 +85,9 @@ class MercadoPagoGateway implements PixGateway
 
     public function verifyWebhook(string $rawBody, array $headers, array $query = []): bool
     {
-        $secret = defined('MP_WEBHOOK_SECRET') ? (string)constant('MP_WEBHOOK_SECRET') : '';
+        $secret = GatewayCredentials::get('mercadopago')['webhook_secret'] ?? '';
         if ($secret === '') {
-            Logger::getInstance()->error('MP_WEBHOOK_SECRET nao configurado — recusando webhook');
+            Logger::getInstance()->error('webhook_secret do Mercado Pago nao cadastrado — recusando webhook');
             return false;
         }
 

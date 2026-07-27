@@ -27,11 +27,11 @@ class config_controller
 
     /**
      * Tela de Configurações do manager: dados da conta do Admin logado + ajuste de
-     * `enabled`/`monthly_limit_cents` por gateway. As Keys/credenciais dos gateways NAO
-     * sao geridas aqui — permanecem em constantes do kernel.php (MP_ACCESS_TOKEN,
-     * PAGBANK_TOKEN, INFINITEPAY_HANDLE, etc.). `slug` e `mode` sao sempre somente
-     * leitura, mesmo tratamento do antigo gateways_controller (amarram ao adapter e a
-     * tela de pagamento; editaveis viram bug de roteamento silencioso).
+     * `enabled`/`monthly_limit_cents` por gateway + credenciais de gateway (plano 026),
+     * cifradas em payment_gateways.credentials_enc e editaveis por pop-up (ver
+     * GatewayCredentials). `slug` e `mode` sao sempre somente leitura, mesmo tratamento
+     * do antigo gateways_controller (amarram ao adapter e a tela de pagamento; editaveis
+     * viram bug de roteamento silencioso).
      */
     public function index(array $info): void
     {
@@ -128,12 +128,21 @@ class config_controller
                 $mtdByGateway[(int)$row['g']] = (int)$row['mtd'];
             }
 
+            // preload() evita 1 SELECT extra por gateway dentro do masked()/
+            // isComplete() abaixo (achado da revisao do plano 026).
+            GatewayCredentials::preload(array_map(static fn (array $g): string => (string)$g['slug'], $gateways));
+
             foreach ($gateways as &$gateway) {
                 $mtd   = $mtdByGateway[(int)$gateway['idx']] ?? 0;
                 $limit = (int)$gateway['monthly_limit_cents'];
 
                 $gateway['mtd_cents'] = $mtd;
                 $gateway['usage_pct'] = $mtd / max(1, $limit) * 100;
+
+                $slug = (string)$gateway['slug'];
+                $gateway['cred_schema']   = GatewayCredentials::SCHEMA[$slug] ?? [];
+                $gateway['cred_masked']   = GatewayCredentials::masked($slug);
+                $gateway['cred_complete'] = GatewayCredentials::isComplete($slug);
             }
             unset($gateway);
 
@@ -196,6 +205,10 @@ class config_controller
             $this->saveSalesWindow($post, $adminId, $config_url);
         } elseif ($action === 'remetente') {
             $this->saveSenderAddress($post, $adminId, $config_url);
+        } elseif ($action === 'credenciais') {
+            $this->saveCredentials($post, $config_url);
+        } elseif ($action === 'credenciais-remover') {
+            $this->clearCredentials($post, $config_url);
         }
 
         basic_redir($config_url);
@@ -311,6 +324,14 @@ class config_controller
         $maxOrderRaw   = trim((string)($post['max_order_cents'] ?? ''));
         $maxOrderCents = $maxOrderRaw === '' ? null : (int)preg_replace('/\D/', '', $maxOrderRaw);
 
+        // Plano 026: nao deixa habilitar gateway sem credencial completa — o
+        // GatewayRouter tiraria ele do sorteio de qualquer jeito, e um toggle
+        // que "liga" mas nao surte efeito e pior do que um erro explicito.
+        if ($enabled === 'yes' && !GatewayCredentials::isComplete($this->gatewaySlug($idx))) {
+            $_SESSION["messages_app"]["danger"] = ["Cadastre as credenciais antes de habilitar este gateway."];
+            basic_redir($config_url);
+        }
+
         // Invariante (decisao do dono, 2026-07-22): entre os gateways HABILITADOS,
         // pelo menos 1 precisa ficar sem teto — o roteamento nunca pode ficar sem
         // rota para pedido de valor alto. Valida o estado RESULTANTE deste save
@@ -373,6 +394,93 @@ class config_controller
         }
 
         return $hasEnabled;                          // habilitados existem e todos com teto
+    }
+
+    /** Slug do gateway $idx, ou '' se nao encontrado. */
+    private function gatewaySlug(int $idx): string
+    {
+        $model = new payment_gateways_model();
+        $model->set_field([" slug "]);
+        $model->set_filter([" active = 'yes' ", " idx = ? "], [$idx]);
+        $model->set_paginate([1]);
+        $model->load_data(false);
+
+        return (string)($model->data[0]['slug'] ?? '');
+    }
+
+    /**
+     * Grava as credenciais de UM gateway, cifradas (plano 026). Campo vazio no
+     * POST significa "manter o valor atual" — e assim que o admin edita um
+     * campo sem ter que redigitar o token inteiro, ja que a tela nunca devolve
+     * o valor em claro ao browser.
+     */
+    private function saveCredentials(array $post, string $config_url): never
+    {
+        $slug = (string)($post['slug'] ?? '');
+        if (!isset(GatewayCredentials::SCHEMA[$slug])) {
+            $_SESSION["messages_app"]["danger"] = ["Gateway desconhecido."];
+            basic_redir($config_url);
+        }
+
+        $values = [];
+        foreach (GatewayCredentials::SCHEMA[$slug] as $field => $def) {
+            $values[$field] = trim((string)($post['cred_' . $field] ?? ''));
+        }
+
+        $rollback = false;
+
+        try {
+            GatewayCredentials::save($slug, $values);
+
+            if (!GatewayCredentials::isComplete($slug)) {
+                $update = new payment_gateways_model();
+                $update->set_filter(["slug = ?"], [$slug]);
+                $update->populate(['enabled' => 'no']);
+                $update->save();
+
+                $_SESSION["messages_app"]["warning"] = ["Gateway desabilitado: faltam credenciais obrigatórias."];
+            } else {
+                $_SESSION["messages_app"]["success"] = ["Credenciais atualizadas com sucesso."];
+            }
+        } catch (RuntimeException | \JsonException $e) {
+            // \JsonException (achado da revisao do plano 026): GatewayCredentials::save()
+            // usa json_encode(..., JSON_THROW_ON_ERROR), que lanca essa excecao (nao e
+            // subclasse de RuntimeException) se algum campo tiver bytes UTF-8 invalidos.
+            $rollback = true;
+            Logger::getInstance()->error("config_action(credenciais) failed", ["slug" => $slug, "error" => $e->getMessage()]);
+            $_SESSION["messages_app"]["danger"] = ["Falha ao atualizar credenciais."];
+        }
+
+        basic_redir($config_url, rollback: $rollback);
+    }
+
+    /** Apaga as credenciais e, por consequencia, desabilita o gateway. */
+    private function clearCredentials(array $post, string $config_url): never
+    {
+        $slug = (string)($post['slug'] ?? '');
+        if (!isset(GatewayCredentials::SCHEMA[$slug])) {
+            $_SESSION["messages_app"]["danger"] = ["Gateway desconhecido."];
+            basic_redir($config_url);
+        }
+
+        $rollback = false;
+
+        try {
+            GatewayCredentials::clear($slug);
+
+            $update = new payment_gateways_model();
+            $update->set_filter(["slug = ?"], [$slug]);
+            $update->populate(['enabled' => 'no']);
+            $update->save();
+
+            $_SESSION["messages_app"]["success"] = ["Credenciais removidas. O gateway foi desabilitado."];
+        } catch (RuntimeException $e) {
+            $rollback = true;
+            Logger::getInstance()->error("config_action(credenciais-remover) failed", ["slug" => $slug, "error" => $e->getMessage()]);
+            $_SESSION["messages_app"]["danger"] = ["Falha ao remover credenciais."];
+        }
+
+        basic_redir($config_url, rollback: $rollback);
     }
 
     private function saveSalesWindow(array $post, int $adminId, string $config_url): never

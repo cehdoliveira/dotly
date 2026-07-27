@@ -34,6 +34,16 @@ define("mail_from_user", "seu_email@exemplo.com");
 define("mail_from_pwd", "SUA_APP_PASSWORD_AQUI");
 define("mail_encryption", "tls");
 
+// ===== Criptografia de dados sensiveis em repouso =====
+// Chave AES-256 em base64 (32 bytes). Cifra as credenciais dos gateways de
+// pagamento guardadas em payment_gateways.credentials_enc — por isso PRECISA
+// ser IDENTICA nos kernels do manager e do site: o manager cifra ao salvar em
+// /config, o site decifra ao cobrar. Divergiu, o site nao cobra mais.
+// Gerar uma nova: php -r 'echo base64_encode(random_bytes(32)), PHP_EOL;'
+// bin/init-whitelabel.sh gera automaticamente para marcas novas.
+// bin/doctor.sh falha se este valor placeholder continuar em producao.
+define("APP_ENCRYPTION_KEY", "VFJPUVVFX0VTVEFfQ0hBVkVfREVfREVTRU5WT0xWSU0=");
+
 // ===== CONTATO (WhatsApp) =====
 // Numero unico da plataforma (footer, tela de pago, e-mails). Trocar aqui
 // atualiza tudo. whatsapp_number = so digitos (DDI+DDD+numero) para wa.me;
@@ -41,29 +51,9 @@ define("mail_encryption", "tls");
 define("whatsapp_number", "5511999999999");
 define("whatsapp_display", "+55 (11) 99999-9999");
 
-// ===== GATEWAYS DE PAGAMENTO (PIX) =====
-// Preencha com as chaves reais de cada PSP. Cada gateway e fail-closed: enquanto a
-// constante estiver vazia, o checkout recusa aquele gateway (RuntimeException
-// "... nao configurado"). Habilite/desabilite os gateways na tabela payment_gateways
-// (coluna enabled = 'yes'/'no'); o GatewayRouter sorteia entre os habilitados.
-// Deixe habilitado APENAS o(s) gateway(s) com credencial preenchida aqui.
-
-// MercadoPago (modo qr — PIX na propria tela)
-define("MP_ACCESS_TOKEN", "");
-define("MP_WEBHOOK_SECRET", "");
-
-// PagBank (modo qr — PIX na propria tela)
-// PAGBANK_API_BASE: https://sandbox.api.pagseguro.com (teste) ou https://api.pagseguro.com (producao)
-define("PAGBANK_API_BASE", "");
-define("PAGBANK_TOKEN", "");
-
-// ATENCAO: o endpoint de webhook do InfinitePay (/webhook/pix/infinitepay) e
-// PUBLICO POR DESIGN — o PSP nao publica assinatura de webhook. A autenticacao
-// real e a reconfirmacao POST /payment_check (fail-closed) feita pelo
-// webhook_controller antes de qualquer escrita; ver README (secao de
-// arquitetura) e InfinitePayGateway::verifyWebhook().
-// InfinitePay (modo redirect — leva ao checkout do InfinitePay)
-define("INFINITEPAY_HANDLE", "");
+// Credenciais dos gateways (tokens/secrets/base de API) NAO ficam mais aqui:
+// vivem cifradas em payment_gateways.credentials_enc e sao cadastradas pelo
+// dono da loja no manager, em /config > Gateways de Pagamento (plano 026).
 
 // ===== APLICAÇÃO =====
 define("cAppKey", "app_site_session");

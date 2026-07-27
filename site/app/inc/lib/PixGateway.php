@@ -7,8 +7,9 @@
  * explicito (CURLOPT_TIMEOUT, CURLOPT_CONNECTTIMEOUT) e CURLOPT_RETURNTRANSFER.
  * Nunca file_get_contents em URL.
  *
- * Credenciais sao lidas via defined('X') ? constant('X') : '' e sao fail-closed:
- * credencial vazia lanca RuntimeException, jamais cobranca sem credencial.
+ * Credenciais sao lidas via GatewayCredentials::get($slug) (payment_gateways.
+ * credentials_enc, cifrado, cadastrado em /config) e sao fail-closed: credencial
+ * vazia lanca RuntimeException, jamais cobranca sem credencial.
  *
  * Nunca logar token/secret — Logger::getInstance()->error(...) so com
  * gateway_charge_id, orders_id, codigo HTTP e mensagem.
