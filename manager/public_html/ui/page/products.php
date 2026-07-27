@@ -7,6 +7,7 @@ $currentQ          = $currentQ ?? '';
 $currentCategory   = $currentCategory ?? '';
 $categories        = $categories ?? [];
 $allCategories     = $allCategories ?? [];
+$defaultCategoryId = $defaultCategoryId ?? 0;
 $currentStock      = $currentStock ?? '';
 $lowStockThreshold = (int)$lowStockThreshold;
 
@@ -274,7 +275,7 @@ $filterParams = array_filter([
                                 <select name="categories_id" class="form-select" required>
                                     <option value="">Selecione uma categoria</option>
                                     <?php foreach ($allCategories as $cat): ?>
-                                        <option value="<?php echo (int)$cat['idx']; ?>">
+                                        <option value="<?php echo (int)$cat['idx']; ?>" <?php echo ((int)$cat['idx'] === $defaultCategoryId) ? 'selected' : ''; ?>>
                                             <?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>
                                         </option>
                                     <?php endforeach; ?>

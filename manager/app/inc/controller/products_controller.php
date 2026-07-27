@@ -15,7 +15,7 @@ class products_controller
      */
     private const SORTABLE = [
         'nome'      => ' name ',
-        'categoria' => ' category ',
+        'categoria' => " (SELECT c.name FROM categories c INNER JOIN products_categories pc ON pc.categories_id = c.idx AND pc.active = 'yes' WHERE pc.products_id = products.idx AND c.active = 'yes' ORDER BY pc.idx DESC LIMIT 1) ",
         'preco'     => ' price_unit_cents ',
         'estoque'   => ' stock ',
     ];
@@ -76,9 +76,18 @@ class products_controller
                 "WHERE active = 'yes' ORDER BY name ASC"
             );
             $allCategories = $allStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $defaultCategoryId = 0;
+            foreach ($allCategories as $cat) {
+                if ($cat['name'] === 'Geral') {
+                    $defaultCategoryId = (int)$cat['idx'];
+                    break;
+                }
+            }
         } catch (RuntimeException $e) {
-            $categories    = [];
-            $allCategories = [];
+            $categories        = [];
+            $allCategories     = [];
+            $defaultCategoryId = 0;
         }
 
         try {
@@ -91,12 +100,13 @@ class products_controller
             );
             $total_products = (int)($countStmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
 
-            $model->set_field([" idx ", " name ", " slug ", products_model::CATEGORY_NAME_FIELD, products_model::CATEGORY_ID_FIELD, " dosage ", " price_unit_cents ", " stock "]);
+            $model->set_field([" idx ", " name ", " slug ", " dosage ", " price_unit_cents ", " stock "]);
             $model->set_filter($conds, $params);
             $model->set_order([$orderExpr]);
             $model->set_paginate([$offset, $perPage]);
             $model->load_data(false);
             $model->join('images', 'product_images', ['products_id' => 'idx'], null, [' idx ', ' products_id ', ' path ', ' is_cover ', ' sort_order ']);
+            $model->attachCategoryName();
             $products = $model->data;
 
             foreach ($products as &$product) {
