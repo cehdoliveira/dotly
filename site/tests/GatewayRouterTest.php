@@ -435,12 +435,14 @@ final class GatewayRouterTest extends DBTestCase
 
     public function testSpikeAboveThresholdExcludesAvoidOnSpikeGateway(): void
     {
-        // Calibra o threshold em cima da baseline real (banco de teste
-        // acumula pedidos pagos de outras suites, sem rollback) para nao
-        // depender de um numero fixo de pedidos existentes na janela.
-        $baseline = $this->countPaidOrdersLastHour();
-        $threshold = $baseline + 3;
-        $this->setSetting('velocity_paid_orders_per_hour', (string)$threshold);
+        // Threshold FIXO (3), sem calibrar pela baseline: os pedidos pagos que
+        // ja existem na janela so SOMAM na contagem, entao os 3 pedidos criados
+        // aqui bastam para cruzar o threshold sozinhos. Calibrar (baseline + 3)
+        // deixava o teste racy: a janela de 60min e deslizante, e pedidos
+        // antigos saindo dela entre a leitura da baseline e o pick() derrubavam
+        // a contagem abaixo do threshold (o banco de teste tem rajadas de
+        // dezenas de pedidos pagos no mesmo segundo).
+        $this->setSetting('velocity_paid_orders_per_hour', '3');
 
         $spikeGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
         $calmGateway  = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'no');
@@ -485,9 +487,9 @@ final class GatewayRouterTest extends DBTestCase
     {
         // Todos os gateways marcados avoid_on_spike + pico detectado: o filtro
         // esvaziaria o conjunto, entao e ignorado — pick() nunca lanca.
-        $baseline = $this->countPaidOrdersLastHour();
-        $threshold = $baseline + 3;
-        $this->setSetting('velocity_paid_orders_per_hour', (string)$threshold);
+        // Threshold fixo pelo mesmo motivo de
+        // testSpikeAboveThresholdExcludesAvoidOnSpikeGateway.
+        $this->setSetting('velocity_paid_orders_per_hour', '3');
 
         $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
         $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'yes');
