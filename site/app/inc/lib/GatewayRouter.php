@@ -56,6 +56,12 @@ final class GatewayRouter
         // meio do checkout. E o UNICO filtro desta classe que pode travar a
         // venda — e isso e deliberado: se nenhum gateway tem chave cadastrada,
         // a loja realmente nao consegue cobrar.
+        //
+        // preload() evita 1 SELECT extra por gateway dentro do isComplete()
+        // abaixo (achado da revisao do plano 026) — pick() roda no caminho
+        // critico de todo checkout.
+        GatewayCredentials::preload(array_map(static fn (array $g): string => (string)$g['slug'], $gateways));
+
         $withCredentials = array_values(array_filter(
             $gateways,
             static fn (array $g): bool => GatewayCredentials::isComplete((string)$g['slug'])
