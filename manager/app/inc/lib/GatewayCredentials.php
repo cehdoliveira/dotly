@@ -61,8 +61,55 @@ final class GatewayCredentials
         $model->load_data(false);
 
         $row = $model->data[0] ?? null;
-        $encrypted = $row['credentials_enc'] ?? null;
 
+        return self::decodeRow($slug, $row['credentials_enc'] ?? null);
+    }
+
+    /**
+     * Pre-carrega credentials_enc de varios slugs numa unica query (WHERE slug
+     * IN (...)), populando o cache estatico. Sem isso, GatewayRouter::pick() e
+     * config_controller::index() disparavam 1 SELECT por gateway alem da
+     * query que ja tinha carregado a lista (achado da revisao do plano 026) —
+     * pick() roda no caminho critico de todo checkout. Slugs ja em cache sao
+     * pulados; slug sem linha correspondente fica cacheado como [] (mesmo
+     * resultado de get() para gateway sem credencial).
+     *
+     * @param string[] $slugs
+     */
+    public static function preload(array $slugs): void
+    {
+        $missing = array_values(array_unique(array_filter(
+            $slugs,
+            static fn (string $slug): bool => $slug !== '' && !array_key_exists($slug, self::$cache)
+        )));
+
+        if (empty($missing)) {
+            return;
+        }
+
+        $model = new payment_gateways_model();
+        $model->set_field([" slug ", " credentials_enc "]);
+        $placeholders = implode(',', array_fill(0, count($missing), '?'));
+        $model->set_filter([" active = 'yes' ", " slug IN ($placeholders) "], $missing);
+        $model->load_data(false);
+
+        $found = [];
+        foreach ($model->data as $row) {
+            $rowSlug = (string)$row['slug'];
+            $found[$rowSlug] = true;
+            self::$cache[$rowSlug] = self::decodeRow($rowSlug, $row['credentials_enc'] ?? null);
+        }
+
+        foreach ($missing as $slug) {
+            if (!isset($found[$slug])) {
+                self::$cache[$slug] = [];
+            }
+        }
+    }
+
+    /** @return array<string,string> */
+    private static function decodeRow(string $slug, mixed $encrypted): array
+    {
         if ($encrypted === null || $encrypted === '') {
             return [];
         }
