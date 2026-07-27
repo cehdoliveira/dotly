@@ -20,6 +20,7 @@ class shop_controller
         $productsModel->set_paginate([1]);
         $productsModel->load_data(false);
         $productsModel->join("images", "product_images", ["products_id" => "idx"], null, [" idx ", " products_id ", " path ", " is_cover ", " sort_order "]);
+        $productsModel->attachCategoryName();
 
         $product = $productsModel->data[0] ?? null;
 

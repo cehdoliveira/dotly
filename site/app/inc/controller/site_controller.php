@@ -24,6 +24,7 @@ class site_controller
         $productsModel->set_order([" sort_order asc ", " name asc "]);
         $productsModel->load_data(false);
         $productsModel->join("images", "product_images", ["products_id" => "idx"], null, [" idx ", " products_id ", " path ", " is_cover ", " sort_order "]);
+        $productsModel->attachCategoryName();
         $products = $productsModel->data;
 
         // Capa de cada produto: a imagem marcada is_cover='yes', ou a primeira
