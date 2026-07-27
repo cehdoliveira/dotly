@@ -31,7 +31,7 @@ final class GatewayCredentials
             'token'    => ['label' => 'Token',                                 'secret' => true,  'required' => true],
         ],
         'infinitepay' => [
-            'handle' => ['label' => 'Handle', 'secret' => false, 'required' => true],
+            'handle' => ['label' => 'Handle', 'secret' => true, 'required' => true],
         ],
     ];
 
