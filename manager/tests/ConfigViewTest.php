@@ -154,6 +154,65 @@ final class ConfigViewTest extends TestCase
         $this->assertMatchesRegularExpression('/name="max_order_cents"[^>]*value="2\.500,00">/s', $html, 'input do teto deve vir pre-preenchido');
     }
 
+    /**
+     * Plano 026: a coluna "Credenciais" mostra o badge de completude e o valor
+     * mascarado no placeholder do modal — o valor em claro do campo secret NUNCA
+     * pode aparecer no HTML renderizado.
+     */
+    public function testGatewayCredentialsColumnRendersWithoutLeakingSecret(): void
+    {
+        $clearTextSecret = 'segredo_super_secreto_nao_pode_vazar';
+
+        $html = $this->render(
+            ['name' => 'Admin', 'mail' => 'a@b.com', 'login' => 'admin', 'phone' => ''],
+            [[
+                'idx' => 1, 'name' => 'Mercado Pago', 'slug' => 'mercadopago', 'mode' => 'qr', 'enabled' => 'yes',
+                'monthly_limit_cents' => 500000, 'max_order_cents' => null, 'mtd_cents' => 0, 'usage_pct' => 0.0,
+                'cred_schema' => [
+                    'access_token'   => ['label' => 'Access Token', 'secret' => true, 'required' => true],
+                    'webhook_secret' => ['label' => 'Webhook Secret', 'secret' => true, 'required' => true],
+                ],
+                'cred_masked' => [
+                    'access_token'   => '••••' . mb_substr($clearTextSecret, -4),
+                    'webhook_secret' => '',
+                ],
+                'cred_complete' => true,
+            ]]
+        );
+
+        $this->assertStringContainsString('Credenciais', $html);
+        $this->assertStringContainsString('Configuradas', $html, 'gateway completo deve mostrar o badge "Configuradas"');
+        $this->assertStringContainsString('gatewayCredsModal1', $html);
+        $this->assertStringContainsString('type="password"', $html, 'campo secret deve usar input type=password');
+        $this->assertStringNotContainsString($clearTextSecret, $html, 'valor em claro do campo secret nunca pode aparecer no HTML');
+        $this->assertStringContainsString('••••' . mb_substr($clearTextSecret, -4), $html, 'placeholder deve mostrar o valor mascarado');
+    }
+
+    /**
+     * Plano 026: gateway sem credencial completa mostra o badge "Faltando" e o
+     * checkbox de habilitar vem desabilitado (defesa visual — a defesa real e o
+     * guard de config_controller::saveGateway()).
+     */
+    public function testGatewayIncompleteCredentialsShowsBadgeAndDisablesCheckbox(): void
+    {
+        $html = $this->render(
+            ['name' => 'Admin', 'mail' => 'a@b.com', 'login' => 'admin', 'phone' => ''],
+            [[
+                'idx' => 2, 'name' => 'PagBank', 'slug' => 'pagbank', 'mode' => 'qr', 'enabled' => 'no',
+                'monthly_limit_cents' => 0, 'max_order_cents' => null, 'mtd_cents' => 0, 'usage_pct' => 0.0,
+                'cred_schema' => [
+                    'api_base' => ['label' => 'URL base da API', 'secret' => false, 'required' => true],
+                    'token'    => ['label' => 'Token', 'secret' => true, 'required' => true],
+                ],
+                'cred_masked' => ['api_base' => '', 'token' => ''],
+                'cred_complete' => false,
+            ]]
+        );
+
+        $this->assertStringContainsString('Faltando', $html);
+        $this->assertMatchesRegularExpression('/name="enabled"[^>]*disabled/s', $html, 'checkbox de habilitar deve vir desabilitado sem credencial completa');
+    }
+
     public function testSenderFormRendersAndEscapes(): void
     {
         $html = $this->render(

@@ -106,6 +106,25 @@ document.addEventListener('alpine:init', () => {
             if (result.isConfirmed) form.submit();
         },
 
+        openGatewayCreds(idx) {
+            const el = document.getElementById('gatewayCredsModal' + idx);
+            if (el) new bootstrap.Modal(el).show();
+        },
+
+        async confirmClearCreds(form, gatewayName) {
+            const result = await Swal.fire({
+                title: 'Remover credenciais?',
+                html: `As chaves de <strong>${this.escapeHtml(gatewayName)}</strong> serão apagadas e o gateway será desabilitado.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Remover',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#ef4444',
+                focusCancel: true,
+            });
+            if (result.isConfirmed) form.submit();
+        },
+
         async confirmResetPassword(idx, userName) {
             const result = await Swal.fire({
                 title: 'Enviar reset de senha?',
