@@ -106,11 +106,15 @@ class products_controller
             $model->set_paginate([$offset, $perPage]);
             $model->load_data(false);
             $model->join('images', 'product_images', ['products_id' => 'idx'], null, [' idx ', ' products_id ', ' path ', ' is_cover ', ' sort_order ']);
-            $model->attachCategoryName();
+            $model->attach(["categories"], class_field: [" idx ", " name "]);
             $products = $model->data;
 
             foreach ($products as &$product) {
                 $product['cover_path'] = $this->coverPath($product['images_attach'] ?? []);
+
+                $linkedCategory          = $product['categories_attach'][0] ?? null;
+                $product['category']      = $linkedCategory['name'] ?? 'Geral';
+                $product['categories_id'] = $linkedCategory['idx']  ?? null;
             }
             unset($product);
         } catch (RuntimeException $e) {
@@ -257,7 +261,7 @@ class products_controller
         $catRaw   = $info['get']['categoria'] ?? '';
         $category = is_string($catRaw) ? trim($catRaw) : '';
         if ($category !== '') {
-            $conds[]  = products_model::CATEGORY_NAME_FILTER;
+            $conds[]  = " idx IN (SELECT pc.products_id FROM products_categories pc INNER JOIN categories c ON c.idx = pc.categories_id AND c.active = 'yes' WHERE pc.active = 'yes' AND c.name = ?) ";
             $params[] = $category;
         }
 
