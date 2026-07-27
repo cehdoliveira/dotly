@@ -19,9 +19,60 @@ declare(strict_types=1);
  * "idempotencia" pre-semeiam a cobranca ja como 'pago' (sem passar por
  * processEvent() para chegar la) e verificam que uma reentrega nao dispara
  * nova escrita — mesma garantia funcional, sem tocar o commit real.
+ *
+ * Credenciais de gateway (plano 026): setUp()/tearDown() seedam pagbank e
+ * mercadopago com valores de teste fixos via GatewayCredentials::save() e
+ * restauram o credentials_enc original de mercadopago/pagbank/infinitepay no
+ * tearDown — os 3 gateways sao linhas REAIS compartilhadas por toda a suite
+ * (sem rollback entre arquivos, ver docblock de DBTestCase), entao qualquer
+ * mutacao precisa ser revertida explicitamente.
  */
 final class WebhookIdempotencyTest extends DBTestCase
 {
+    private const TEST_PAGBANK_TOKEN = 'test_pagbank_token_plano026';
+    private const TEST_MP_WEBHOOK_SECRET = 'test_mp_webhook_secret_plano026';
+
+    /** @var array<string, string|null> slug => credentials_enc original */
+    private array $originalCredentialsEnc = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        GatewayCredentials::resetCache();
+
+        foreach (['mercadopago', 'pagbank', 'infinitepay'] as $slug) {
+            $model = new payment_gateways_model();
+            $model->set_field([" credentials_enc "]);
+            $model->set_filter([" active = 'yes' ", " slug = ? "], [$slug]);
+            $model->set_paginate([1]);
+            $model->load_data(false);
+            $this->originalCredentialsEnc[$slug] = $model->data[0]['credentials_enc'] ?? null;
+        }
+
+        GatewayCredentials::save('pagbank', [
+            'api_base' => 'https://sandbox.api.pagseguro.com',
+            'token'    => self::TEST_PAGBANK_TOKEN,
+        ]);
+        GatewayCredentials::save('mercadopago', [
+            'access_token'   => 'test_mp_access_token_plano026',
+            'webhook_secret' => self::TEST_MP_WEBHOOK_SECRET,
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->originalCredentialsEnc as $slug => $credentialsEnc) {
+            $model = new payment_gateways_model();
+            $model->execute_raw_prepared(
+                "UPDATE payment_gateways SET credentials_enc = ? WHERE slug = ?",
+                [$credentialsEnc, $slug]
+            );
+        }
+
+        GatewayCredentials::resetCache();
+        parent::tearDown();
+    }
+
     private function gatewayIdBySlug(string $slug): int
     {
         $model = new payment_gateways_model();
@@ -132,14 +183,11 @@ final class WebhookIdempotencyTest extends DBTestCase
 
     public function testValidPagBankSignaturePassesAuthCheck(): void
     {
-        if (!defined('PAGBANK_TOKEN') || (string)constant('PAGBANK_TOKEN') === '') {
-            $this->markTestSkipped('PAGBANK_TOKEN nao configurado neste ambiente.');
-        }
-
         // HMAC calculado no proprio teste (mesma formula do adapter) — nao bate
         // na rede, so confirma que a assinatura correta passa no verifyWebhook().
+        // Credencial semeada no setUp() (plano 026), nunca lida de kernel.php.
         $rawBody = '{"qr_codes":[{"id":"QRCO_inexistente_no_banco"}]}';
-        $signature = hash('sha256', (string)constant('PAGBANK_TOKEN') . '-' . $rawBody);
+        $signature = hash('sha256', self::TEST_PAGBANK_TOKEN . '-' . $rawBody);
 
         $controller = new webhook_controller();
         $result = $controller->processEvent('pagbank', $rawBody, ['x-authenticity-token' => $signature]);
@@ -162,11 +210,8 @@ final class WebhookIdempotencyTest extends DBTestCase
      */
     public function testMercadoPagoValidSignatureWithDataIdOnlyInQueryPassesAuthCheck(): void
     {
-        if (!defined('MP_WEBHOOK_SECRET') || (string)constant('MP_WEBHOOK_SECRET') === '') {
-            $this->markTestSkipped('MP_WEBHOOK_SECRET nao configurado neste ambiente.');
-        }
-
-        $secret = (string)constant('MP_WEBHOOK_SECRET');
+        // Credencial semeada no setUp() (plano 026), nunca lida de kernel.php.
+        $secret = self::TEST_MP_WEBHOOK_SECRET;
         $rawBody = '{"type":"payment"}'; // sem data.id no body de proposito
         $ts = '1700000000';
         $requestId = 'req-ship-026';
@@ -255,17 +300,16 @@ final class WebhookIdempotencyTest extends DBTestCase
      * 200, que faria o PSP achar que o webhook foi tratado e nao reenviar (sem
      * endpoint de reconciliacao, o pagamento ficaria perdido pra sempre).
      *
-     * So roda quando INFINITEPAY_HANDLE nao esta configurado (kernel.php.example,
-     * caso comum em CI) — mesmo padrao de skip ja usado acima para
-     * MP_WEBHOOK_SECRET/PAGBANK_TOKEN. Um corpo com transaction_nsu/slug
-     * presentes bate primeiro nesse gate (a ordem das checagens em
-     * confirmPayment() foi corrigida de proposito para isso — ver o metodo).
+     * Limpa a credencial da InfinitePay explicitamente (plano 026), em vez de
+     * depender do ambiente nao ter a constante configurada (padrao antigo,
+     * invertido: so rodava quando INFINITEPAY_HANDLE estava vazio). Um corpo
+     * com transaction_nsu/slug presentes bate primeiro nesse gate (a ordem das
+     * checagens em confirmPayment() foi corrigida de proposito para isso — ver
+     * o metodo).
      */
     public function testInfinitePayMissingHandleReturnsRetriable502(): void
     {
-        if (!defined('INFINITEPAY_HANDLE') || (string)constant('INFINITEPAY_HANDLE') !== '') {
-            $this->markTestSkipped('INFINITEPAY_HANDLE configurado neste ambiente — nada a testar aqui.');
-        }
+        GatewayCredentials::clear('infinitepay');
 
         $ctx = $this->createOrderWithCharge(
             gatewayId: $this->gatewayIdBySlug('infinitepay'),
@@ -476,10 +520,11 @@ final class WebhookIdempotencyTest extends DBTestCase
      *
      * NAO e possivel provar isto via processEvent() de ponta a ponta neste
      * ambiente: alcancar a escrita real de 'pago' exige confirmacao positiva
-     * de um PSP real (MP_WEBHOOK_SECRET/PAGBANK_TOKEN nao configurados aqui —
-     * mesma limitacao ja documentada no docblock desta classe — e o InfinitePay
-     * falha fechado sem rede quando INFINITEPAY_HANDLE nao esta configurado,
-     * nunca chegando a `paid=true`). Este teste isola a garantia que importa —
+     * de um PSP real via rede (assinatura valida MP/PagBank so passa a
+     * checagem de auth, nao confirma pagamento sozinha — mesma limitacao ja
+     * documentada no docblock desta classe — e o InfinitePay falha fechado
+     * sem rede quando nao ha credencial cadastrada, nunca chegando a
+     * `paid=true`). Este teste isola a garantia que importa —
      * a query condicional em si — replicando exatamente as duas escritas de
      * `webhook_controller::processEvent()` (linhas do guard de corrida) contra
      * um pedido/cobranca ja 'expirado' e confirmando 0 linhas afetadas e nenhum
