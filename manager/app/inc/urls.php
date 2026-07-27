@@ -11,6 +11,7 @@ $customer_url      = sprintf("%s%s/%s", constant("cFrontend"), "clientes", "%d")
 $verify_email_url  = sprintf("%s%s/%s", constant("cFrontend"), "verificar-email", "%s");
 $set_password_url  = sprintf("%s%s/%s", constant("cFrontend"), "definir-senha", "%s");
 $products_url = sprintf("%s%s", constant("cFrontend"), "produtos");
+$product_categories_url = sprintf("%s%s", constant("cFrontend"), "produtos/categorias");
 $orders_url   = sprintf("%s%s", constant("cFrontend"), "pedidos");
 $order_url    = sprintf("%s%s/%s", constant("cFrontend"), "pedidos", "%d");
 $order_ship_url = sprintf("%s%s/%s/%s", constant("cFrontend"), "pedidos", "%d", "enviar");

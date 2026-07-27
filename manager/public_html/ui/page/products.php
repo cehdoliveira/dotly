@@ -10,6 +10,7 @@ $allCategories     = $allCategories ?? [];
 $defaultCategoryId = $defaultCategoryId ?? 0;
 $currentStock      = $currentStock ?? '';
 $lowStockThreshold = (int)$lowStockThreshold;
+$categoriesUrl     = $GLOBALS['product_categories_url'] ?? '';
 
 // Opções do filtro de estoque. Chaves batem com products_controller::buildFilter
 // (só estas viram condição); "crítico" = baixo OU esgotado.
@@ -38,7 +39,9 @@ $filterParams = array_filter([
 ], static fn($v) => $v !== '');
 ?>
 
-<div class="manager-layout" x-data="productsController()" x-init="init()">
+<div class="manager-layout"
+    x-data="productsController(<?php echo htmlspecialchars(json_encode($allCategories, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>, <?php echo (int)$defaultCategoryId; ?>)"
+    x-init="init()">
 
     <!-- Sidebar -->
     <?php include(constant("cRootServer") . "ui/common/sidebar.php"); ?>
@@ -56,6 +59,9 @@ $filterParams = array_filter([
                     <p>Olá, <?php echo $userName; ?>. Gerencie o catálogo de produtos da loja.</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary" style="white-space:nowrap;" @click="openCategories()">
+                        <i class="bi bi-tags me-1" aria-hidden="true"></i> Nova Categoria
+                    </button>
                     <button type="button" class="btn btn-primary" style="white-space:nowrap;" @click="openCreate()">
                         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Novo Produto
                     </button>
@@ -272,13 +278,11 @@ $filterParams = array_filter([
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" for="create-product-categoria" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
-                                <select id="create-product-categoria" name="categories_id" class="form-select" required>
+                                <select id="create-product-categoria" name="categories_id" class="form-select" x-model="createCategoryId" required>
                                     <option value="">Selecione uma categoria</option>
-                                    <?php foreach ($allCategories as $cat): ?>
-                                        <option value="<?php echo (int)$cat['idx']; ?>" <?php echo ((int)$cat['idx'] === $defaultCategoryId) ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>
-                                        </option>
-                                    <?php endforeach; ?>
+                                    <template x-for="cat in categories" :key="cat.idx">
+                                        <option :value="cat.idx" x-text="cat.name"></option>
+                                    </template>
                                 </select>
                             </div>
                             <div class="mb-3">
@@ -338,11 +342,9 @@ $filterParams = array_filter([
                                 <label class="form-label" for="edit-product-categoria" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
                                 <select id="edit-product-categoria" name="categories_id" class="form-select" x-model="editData.categoriesId" required>
                                     <option value="">Selecione uma categoria</option>
-                                    <?php foreach ($allCategories as $cat): ?>
-                                        <option value="<?php echo (int)$cat['idx']; ?>">
-                                            <?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>
-                                        </option>
-                                    <?php endforeach; ?>
+                                    <template x-for="cat in categories" :key="cat.idx">
+                                        <option :value="cat.idx" x-text="cat.name"></option>
+                                    </template>
                                 </select>
                             </div>
                             <div class="mb-3">
@@ -368,6 +370,91 @@ $filterParams = array_filter([
                             <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de categorias -->
+        <div id="manageCategoriesModal" class="modal fade" tabindex="-1" aria-labelledby="manageCategoriesModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="background:var(--surface);border:1px solid var(--border);border-radius:0.5rem;">
+
+                    <div class="modal-header" style="border-color:var(--border);padding:1rem 1.25rem 0.75rem;">
+                        <h5 class="modal-title" id="manageCategoriesModalLabel"
+                            style="font-size:0.9rem;font-weight:700;color:var(--text);">
+                            <i class="bi bi-tags me-2" style="color:var(--accent)" aria-hidden="true"></i>Categorias
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+
+                    <div class="modal-body" style="padding:1.25rem;">
+
+                        <input type="hidden" id="categories-endpoint" value="<?php echo htmlspecialchars($categoriesUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" id="categories-csrf" value="<?php echo $csrfToken; ?>">
+
+                        <div x-show="categoriesError" x-cloak class="alert alert-danger py-2 px-3 mb-3"
+                            style="font-size:0.8rem;" x-text="categoriesError" role="alert"></div>
+
+                        <template x-if="categories.length === 0">
+                            <p class="mb-3" style="font-size:0.82rem;color:var(--text-muted);">Nenhuma categoria cadastrada ainda.</p>
+                        </template>
+
+                        <ul class="list-unstyled mb-3">
+                            <template x-for="cat in categories" :key="cat.idx">
+                                <li class="d-flex align-items-center gap-2 py-2" style="border-bottom:1px solid var(--border);">
+
+                                    <span x-show="editingCategoryId !== cat.idx" class="flex-grow-1"
+                                        style="font-size:0.85rem;" x-text="cat.name"></span>
+
+                                    <input x-show="editingCategoryId === cat.idx" x-cloak type="text"
+                                        class="form-control form-control-sm flex-grow-1"
+                                        x-model="editingCategoryName" maxlength="60"
+                                        @keydown.enter.prevent="saveCategory()"
+                                        @keydown.escape.prevent="cancelEditCategory()">
+
+                                    <template x-if="editingCategoryId !== cat.idx">
+                                        <span class="d-flex gap-1">
+                                            <button type="button" class="btn btn-sm btn-action-edit" title="Editar categoria"
+                                                :disabled="categoriesLoading" @click="startEditCategory(cat)">
+                                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-action-remove" title="Remover categoria"
+                                                :disabled="categoriesLoading" @click="confirmRemoveCategory(cat)">
+                                                <i class="bi bi-trash" aria-hidden="true"></i>
+                                            </button>
+                                        </span>
+                                    </template>
+
+                                    <template x-if="editingCategoryId === cat.idx">
+                                        <span class="d-flex gap-1">
+                                            <button type="button" class="btn btn-sm btn-primary" title="Salvar"
+                                                :disabled="categoriesLoading" @click="saveCategory()">
+                                                <i class="bi bi-check-lg" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-secondary" title="Cancelar"
+                                                :disabled="categoriesLoading" @click="cancelEditCategory()">
+                                                <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                            </button>
+                                        </span>
+                                    </template>
+                                </li>
+                            </template>
+                        </ul>
+
+                        <div class="d-flex gap-2">
+                            <input type="text" class="form-control form-control-sm" placeholder="Nome da nova categoria"
+                                maxlength="60" x-model="newCategoryName" autocomplete="off"
+                                @keydown.enter.prevent="addCategory()">
+                            <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
+                                :disabled="categoriesLoading" @click="addCategory()">
+                                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Adicionar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer" style="border-color:var(--border);padding:0.75rem 1.25rem;justify-content:end;">
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
                 </div>
             </div>
         </div>
