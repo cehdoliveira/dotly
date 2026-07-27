@@ -9,8 +9,10 @@ use PHPUnit\Framework\TestCase;
  * derivado/validado). E chamada via Reflection (o metodo e private, seguindo o
  * mesmo padrao de validacao inline usado em outros controllers deste projeto).
  *
- * Plano 023: taxonomia de categorias removida — `category` volta a ser texto livre
- * validado inline (obrigatorio, <= 60 chars, o tamanho da coluna `products.category`).
+ * Plano 023: `category` deixou de ser texto livre — a taxonomia mora em
+ * `categories` e a relacao em `products_categories`. validate() agora so exige
+ * um `categories_id` > 0; a existencia da categoria e checada em action()
+ * (contexto de banco), para validate() continuar puro e testavel sem DB.
  */
 final class ProductsValidationTest extends TestCase
 {
@@ -37,7 +39,7 @@ final class ProductsValidationTest extends TestCase
         [$valid, $data] = $this->callValidate([
             'name'             => 'Produto Teste',
             'slug'             => 'produto-teste',
-            'category'         => 'Peptídeos',
+            'categories_id'    => 1,
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
@@ -50,7 +52,7 @@ final class ProductsValidationTest extends TestCase
         [$valid, $data] = $this->callValidate([
             'name'             => 'Produto Teste',
             'slug'             => 'Slug Inválido!!',
-            'category'         => 'Peptídeos',
+            'categories_id'    => 1,
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
@@ -63,7 +65,7 @@ final class ProductsValidationTest extends TestCase
         [$valid, $data] = $this->callValidate([
             'name'             => 'Ipamorelin 5mg',
             'slug'             => '',
-            'category'         => 'Peptídeos',
+            'categories_id'    => 1,
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
@@ -76,7 +78,7 @@ final class ProductsValidationTest extends TestCase
         [$valid, $data] = $this->callValidate([
             'name'             => 'Produto Teste',
             'slug'             => 'produto-teste',
-            'category'         => 'Peptídeos',
+            'categories_id'    => 1,
             'price_unit_cents' => 'R$ 0,00',
         ]);
 
@@ -89,7 +91,20 @@ final class ProductsValidationTest extends TestCase
         [$valid, $data] = $this->callValidate([
             'name'             => '',
             'slug'             => 'produto-teste',
-            'category'         => 'Peptídeos',
+            'categories_id'    => 1,
+            'price_unit_cents' => 'R$ 70,00',
+        ]);
+
+        $this->assertFalse($valid);
+        $this->assertSame([], $data);
+    }
+
+    public function testEmptyCategoryIdIsRejected(): void
+    {
+        [$valid, $data] = $this->callValidate([
+            'name'             => 'Produto Teste',
+            'slug'             => 'produto-teste',
+            'categories_id'    => '',
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
@@ -102,7 +117,6 @@ final class ProductsValidationTest extends TestCase
         [$valid, $data] = $this->callValidate([
             'name'             => 'Produto Teste',
             'slug'             => 'produto-teste',
-            'category'         => '',
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
@@ -110,12 +124,12 @@ final class ProductsValidationTest extends TestCase
         $this->assertSame([], $data);
     }
 
-    public function testCategoryOverSixtyCharsIsRejected(): void
+    public function testZeroCategoryIdIsRejected(): void
     {
         [$valid, $data] = $this->callValidate([
             'name'             => 'Produto Teste',
             'slug'             => 'produto-teste',
-            'category'         => str_repeat('a', 61),
+            'categories_id'    => '0',
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
@@ -123,29 +137,17 @@ final class ProductsValidationTest extends TestCase
         $this->assertSame([], $data);
     }
 
-    public function testCategoryIsTrimmedAndAccepted(): void
+    public function testValidCategoryIdIsReturnedAsInt(): void
     {
         [$valid, $data] = $this->callValidate([
             'name'             => 'Produto Teste',
             'slug'             => 'produto-teste',
-            'category'         => '  Nootrópicos  ',
+            'categories_id'    => '7',
             'price_unit_cents' => 'R$ 70,00',
         ]);
 
         $this->assertTrue($valid);
-        $this->assertSame('Nootrópicos', $data['category']);
-    }
-
-    public function testCategoryInternalWhitespaceIsCollapsed(): void
-    {
-        [$valid, $data] = $this->callValidate([
-            'name'             => 'Produto Teste',
-            'slug'             => 'produto-teste',
-            'category'         => 'Testosterona   Enantato',
-            'price_unit_cents' => 'R$ 70,00',
-        ]);
-
-        $this->assertTrue($valid);
-        $this->assertSame('Testosterona Enantato', $data['category']);
+        $this->assertSame(7, $data['categories_id']);
+        $this->assertArrayNotHasKey('category', $data, 'validate() nao devolve mais nome de categoria');
     }
 }
