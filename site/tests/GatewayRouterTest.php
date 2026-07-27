@@ -3,28 +3,44 @@
 declare(strict_types=1);
 
 /**
- * Cobre GatewayRouter::pick(): so sorteia gateways enabled='yes', escolhe pelo
- * menor mtd/limite quando todos estouram o headroom, e a distribuicao do
- * sorteio ponderado respeita a proporcao de headroom entre os gateways.
+ * Cobre GatewayRouter::pick(): so sorteia gateways enabled='yes' COM credencial
+ * completa (plano 026), escolhe pelo menor mtd/limite quando todos estouram o
+ * headroom, e a distribuicao do sorteio ponderado respeita a proporcao de
+ * headroom entre os gateways.
  *
  * Isolamento: GatewayRouter::pick() consulta TODOS os gateways enabled='yes'
  * sem filtro adicional — para nao depender de quais gateways ja estao
  * habilitados no banco (seeds de migrations/007_create_table_payment_gateways.sql, ou estado deixado por outro
  * teste), desabilitamos temporariamente qualquer gateway ja habilitado no
- * setUp e restauramos no tearDown. Os gateways de teste usam slug unico
- * (uniqid()) e sao desativados no tearDown.
+ * setUp e restauramos no tearDown.
+ *
+ * Fixtures (plano 026): GatewayCredentials::SCHEMA e fechado por slug
+ * (mercadopago/pagbank/infinitepay), entao nao da mais pra criar gateways com
+ * slug uniqid() como antes do plano 026 — o filtro de credencial completa do
+ * Step 6 os excluiria sempre. Os testes usam os 2 slugs reais 'mercadopago' e
+ * 'pagbank' como "gateway A"/"gateway B", mutando enabled/monthly_limit_cents/
+ * max_order_cents/avoid_on_spike/credentials_enc dessas 2 linhas reais e
+ * restaurando o estado ORIGINAL de cada campo no tearDown — mesmo padrao de
+ * salvar-e-restaurar que este arquivo ja usava para `enabled`.
  */
 final class GatewayRouterTest extends DBTestCase
 {
+    private const SLUG_A = 'mercadopago';
+    private const SLUG_B = 'pagbank';
+
     /** @var int[] */
     private array $previouslyEnabledIds = [];
 
+    /** @var array<int, array<string,mixed>> idx => snapshot da linha antes do teste */
+    private array $originalGatewayState = [];
+
     /** @var int[] */
-    private array $createdGatewayIds = [];
+    private array $touchedGatewayIdx = [];
 
     protected function setUp(): void
     {
         parent::setUp();
+        GatewayCredentials::resetCache();
 
         $model = new payment_gateways_model();
         $model->set_field([" idx "]);
@@ -37,16 +53,32 @@ final class GatewayRouterTest extends DBTestCase
             $this->setGatewayEnabled($idx, 'no');
         }
 
-        $this->createdGatewayIds = [];
+        $this->originalGatewayState = [];
+        $this->touchedGatewayIdx = [];
     }
 
     protected function tearDown(): void
     {
-        foreach ($this->createdGatewayIds as $idx) {
+        foreach ($this->touchedGatewayIdx as $idx) {
+            $orig = $this->originalGatewayState[$idx];
+
             $update = new payment_gateways_model();
             $update->set_filter(["idx = ?"], [$idx]);
-            $update->populate(['active' => 'no', 'enabled' => 'no']);
+            $update->populate([
+                'enabled'             => (string)$orig['enabled'],
+                'monthly_limit_cents' => (string)$orig['monthly_limit_cents'],
+                'max_order_cents'     => $orig['max_order_cents'],
+                'avoid_on_spike'      => (string)$orig['avoid_on_spike'],
+            ]);
             $update->save();
+
+            // Restaura o credentials_enc cru (bypassa GatewayCredentials::save()/
+            // clear() de proposito — o valor original pode ser NULL, o que
+            // save() nao produz).
+            $update->execute_raw_prepared(
+                "UPDATE payment_gateways SET credentials_enc = ? WHERE idx = ?",
+                [$orig['credentials_enc'], $idx]
+            );
         }
 
         foreach ($this->previouslyEnabledIds as $idx) {
@@ -58,6 +90,7 @@ final class GatewayRouterTest extends DBTestCase
         // entre todos os testes do processo — ver padrao em OrderPricingTest).
         $this->setSetting('velocity_paid_orders_per_hour', '0');
 
+        GatewayCredentials::resetCache();
         parent::tearDown();
     }
 
@@ -97,30 +130,107 @@ final class GatewayRouterTest extends DBTestCase
         $update->save();
     }
 
-    private function createGateway(string $slug, string $enabled, int $monthlyLimitCents, ?int $maxOrderCents = null, ?string $avoidOnSpike = null): int
+    private function gatewayIdxBySlug(string $slug): int
     {
         $model = new payment_gateways_model();
-        $data = [
-            'name'                => 'Gateway ' . $slug,
-            'slug'                => $slug,
-            'mode'                => 'qr',
+        $model->set_field([" idx "]);
+        $model->set_filter([" active = 'yes' ", " slug = ? "], [$slug]);
+        $model->set_paginate([1]);
+        $model->load_data(false);
+
+        $idx = (int)($model->data[0]['idx'] ?? 0);
+        $this->assertGreaterThan(0, $idx, "gateway seed '$slug' deveria existir (migrations/007)");
+
+        return $idx;
+    }
+
+    /** @return array<string,string> valores de credencial validos para o slug (SCHEMA required). */
+    private function validCredentialsFor(string $slug): array
+    {
+        return match ($slug) {
+            self::SLUG_A => ['access_token' => 'tok_teste', 'webhook_secret' => 'sec_teste'],
+            self::SLUG_B => ['api_base' => 'https://sandbox.api.pagseguro.com', 'token' => 'tok_teste'],
+            default => throw new \InvalidArgumentException("sem credencial de teste para slug '$slug'"),
+        };
+    }
+
+    /**
+     * mtd (mes corrente) ja acumulado pelo gateway $gatewayIdx, mesma query de
+     * GatewayRouter::pick(). Os 3 gateways reais sao COMPARTILHADOS por toda a
+     * suite (models usam localPDO::getInstance(), sem rollback entre testes/
+     * arquivos — ver docblock de DBTestCase) — outras suites (webhook, checkout,
+     * etc.) ja criaram pix_charges/orders pagos contra esses mesmos idx antes
+     * deste teste rodar.
+     */
+    private function currentMtdCents(int $gatewayIdx): int
+    {
+        $monthStart = date('Y-m-01 00:00:00');
+
+        $model = new pix_charges_model();
+        $stmt = $model->select(
+            [" COALESCE(SUM(o.total_cents), 0) AS mtd "],
+            "WHERE c.active = 'yes' AND c.payment_gateways_id = ? AND o.status = 'pago' AND o.paid_at >= ?",
+            [$gatewayIdx, $monthStart],
+            "c",
+            "JOIN orders o ON o.idx = c.orders_id"
+        );
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        return $row !== false ? (int)$row['mtd'] : 0;
+    }
+
+    /**
+     * Configura o gateway real $slug com os parametros de teste e credencial
+     * completa (para nao ser excluido pelo filtro do Step 6). Salva o estado
+     * ORIGINAL da linha na 1a chamada do teste, para o tearDown restaurar.
+     *
+     * $desiredHeadroomCents NAO e gravado direto em monthly_limit_cents: o
+     * valor gravado e currentMtdCents($idx) + $desiredHeadroomCents, para o
+     * headroom REAL (limit - mtd) que GatewayRouter::pick() calcula bater
+     * exatamente com o que o teste pede, mesmo com os 3 gateways reais
+     * carregando mtd acumulado de outras suites (ver currentMtdCents()). Um
+     * pedido pago criado DEPOIS desta chamada (createPaidOrderForGateway) soma
+     * ao mtd normalmente e reduz o headroom, como esperado.
+     */
+    private function useGateway(
+        string $slug,
+        string $enabled,
+        int $desiredHeadroomCents,
+        ?int $maxOrderCents = null,
+        ?string $avoidOnSpike = null,
+        bool $withCredentials = true
+    ): int {
+        $idx = $this->gatewayIdxBySlug($slug);
+
+        if (!in_array($idx, $this->touchedGatewayIdx, true)) {
+            $read = new payment_gateways_model();
+            $read->set_field([" idx ", " enabled ", " monthly_limit_cents ", " max_order_cents ", " avoid_on_spike ", " credentials_enc "]);
+            $read->set_filter(["idx = ?"], [$idx]);
+            $read->set_paginate([1]);
+            $read->load_data(false);
+            $this->originalGatewayState[$idx] = $read->data[0];
+            $this->touchedGatewayIdx[] = $idx;
+        }
+
+        $monthlyLimitCents = $this->currentMtdCents($idx) + $desiredHeadroomCents;
+
+        $update = new payment_gateways_model();
+        $update->set_filter(["idx = ?"], [$idx]);
+        $update->populate([
             'enabled'             => $enabled,
             'monthly_limit_cents' => $monthlyLimitCents,
-        ];
-        if ($maxOrderCents !== null) {
-            $data['max_order_cents'] = $maxOrderCents;
-        }
-        if ($avoidOnSpike !== null) {
-            $data['avoid_on_spike'] = $avoidOnSpike;
-        }
-        $model->populate($data);
-        $id = $model->save();
-        $this->assertIsInt($id);
-        $this->assertGreaterThan(0, $id);
+            'max_order_cents'     => $maxOrderCents,
+            'avoid_on_spike'      => $avoidOnSpike ?? 'no',
+        ]);
+        $update->save();
 
-        $this->createdGatewayIds[] = $id;
+        if ($withCredentials) {
+            GatewayCredentials::save($slug, $this->validCredentialsFor($slug));
+        } else {
+            GatewayCredentials::clear($slug);
+        }
 
-        return $id;
+        return $idx;
     }
 
     private function createPaidOrderForGateway(int $gatewayId, int $totalCents, ?string $paidAt = null): void
@@ -170,8 +280,8 @@ final class GatewayRouterTest extends DBTestCase
 
     public function testOnlyPicksEnabledGateways(): void
     {
-        $enabledId = $this->createGateway('teste-enabled-' . uniqid(), 'yes', 100000);
-        $this->createGateway('teste-disabled-' . uniqid(), 'no', 100000);
+        $enabledId = $this->useGateway(self::SLUG_A, 'yes', 100000);
+        $this->useGateway(self::SLUG_B, 'no', 100000);
 
         for ($i = 0; $i < 20; $i++) {
             $picked = GatewayRouter::pick();
@@ -182,11 +292,11 @@ final class GatewayRouterTest extends DBTestCase
     public function testAllOutOfHeadroomPicksLowestUtilizationRatio(): void
     {
         // A: limite 10000, ja faturou 10000 -> ratio 1.0 (estourado)
-        $gatewayA = $this->createGateway('teste-estourado-a-' . uniqid(), 'yes', 10000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 10000);
         $this->createPaidOrderForGateway($gatewayA, 10000);
 
         // B: limite 10000, ja faturou 9000 -> ratio 0.9 (estourado, mas menos)
-        $gatewayB = $this->createGateway('teste-estourado-b-' . uniqid(), 'yes', 10000);
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 10000);
         $this->createPaidOrderForGateway($gatewayB, 9000);
 
         $picked = GatewayRouter::pick();
@@ -197,8 +307,8 @@ final class GatewayRouterTest extends DBTestCase
     public function testZeroMonthlyLimitCountsAsZeroHeadroom(): void
     {
         // limite 0 conta como headroom 0 — so e escolhido no fallback.
-        $gatewayZeroLimit = $this->createGateway('teste-limite-zero-' . uniqid(), 'yes', 0);
-        $gatewayWithRoom  = $this->createGateway('teste-com-folga-' . uniqid(), 'yes', 5000);
+        $gatewayZeroLimit = $this->useGateway(self::SLUG_A, 'yes', 0);
+        $gatewayWithRoom  = $this->useGateway(self::SLUG_B, 'yes', 5000);
 
         $picked = GatewayRouter::pick();
 
@@ -208,8 +318,8 @@ final class GatewayRouterTest extends DBTestCase
     public function testWeightedDistributionRespectsHeadroomProportion(): void
     {
         // A: headroom 8000 (80%), B: headroom 2000 (20%). Sem faturamento no mes.
-        $gatewayA = $this->createGateway('teste-peso-a-' . uniqid(), 'yes', 8000);
-        $gatewayB = $this->createGateway('teste-peso-b-' . uniqid(), 'yes', 2000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 8000);
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 2000);
 
         $counts = [$gatewayA => 0, $gatewayB => 0];
         $iterations = 1000;
@@ -232,8 +342,8 @@ final class GatewayRouterTest extends DBTestCase
     {
         // A: teto 50000 (abaixo do pedido), B: sem teto. pedido de 60000 -> so B
         // fica elegivel, entao o sorteio (mesmo ponderado) sempre escolhe B.
-        $gatewayA = $this->createGateway('teste-teto-a-' . uniqid(), 'yes', 100000, 50000);
-        $gatewayB = $this->createGateway('teste-teto-b-' . uniqid(), 'yes', 100000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, 50000);
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 100000);
 
         for ($i = 0; $i < 20; $i++) {
             $picked = GatewayRouter::pick(60000);
@@ -246,8 +356,8 @@ final class GatewayRouterTest extends DBTestCase
         // A: teto 40000 (== pedido, elegivel por <=), B: sem teto. Ambos com
         // headroom generoso -> ambos devem aparecer no sorteio ao longo de N
         // tentativas.
-        $gatewayA = $this->createGateway('teste-teto-ok-a-' . uniqid(), 'yes', 100000, 40000);
-        $gatewayB = $this->createGateway('teste-teto-ok-b-' . uniqid(), 'yes', 100000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, 40000);
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 100000);
 
         $seen = [];
         for ($i = 0; $i < 50; $i++) {
@@ -263,8 +373,8 @@ final class GatewayRouterTest extends DBTestCase
     {
         // A e B com teto abaixo do pedido -> filtro esvaziaria o conjunto; teto e
         // ignorado (nunca bloqueia a venda) e o sorteio segue normalmente.
-        $gatewayA = $this->createGateway('teste-teto-est-a-' . uniqid(), 'yes', 100000, 1000);
-        $gatewayB = $this->createGateway('teste-teto-est-b-' . uniqid(), 'yes', 100000, 2000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, 1000);
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 100000, 2000);
 
         $picked = GatewayRouter::pick(50000);
 
@@ -275,7 +385,7 @@ final class GatewayRouterTest extends DBTestCase
     {
         // Regressao: pick() sem argumento preserva o comportamento antigo — nao
         // filtra por max_order_cents, mesmo quando o gateway tem teto definido.
-        $gatewayA = $this->createGateway('teste-sem-arg-' . uniqid(), 'yes', 100000, 1000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, 1000);
 
         $picked = GatewayRouter::pick();
 
@@ -291,8 +401,8 @@ final class GatewayRouterTest extends DBTestCase
      */
     public function testMaxOrderCentsZeroExcludesGatewayFromAnyRealOrder(): void
     {
-        $gatewayA = $this->createGateway('teste-teto-zero-a-' . uniqid(), 'yes', 100000, 0);
-        $gatewayB = $this->createGateway('teste-teto-zero-b-' . uniqid(), 'yes', 100000);
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, 0);
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 100000);
 
         for ($i = 0; $i < 20; $i++) {
             $picked = GatewayRouter::pick(1);
@@ -307,8 +417,8 @@ final class GatewayRouterTest extends DBTestCase
         // elegivel.
         $this->setSetting('velocity_paid_orders_per_hour', '0');
 
-        $spikeGateway = $this->createGateway('tv0-spike-' . uniqid(), 'yes', 100000, null, 'yes');
-        $calmGateway  = $this->createGateway('tv0-calm-' . uniqid(), 'yes', 100000, null, 'no');
+        $spikeGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
+        $calmGateway  = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'no');
 
         for ($i = 0; $i < 3; $i++) {
             $this->createPaidOrderForGateway($calmGateway, 1000);
@@ -332,8 +442,8 @@ final class GatewayRouterTest extends DBTestCase
         $threshold = $baseline + 3;
         $this->setSetting('velocity_paid_orders_per_hour', (string)$threshold);
 
-        $spikeGateway = $this->createGateway('tv1-spike-' . uniqid(), 'yes', 100000, null, 'yes');
-        $calmGateway  = $this->createGateway('tv1-calm-' . uniqid(), 'yes', 100000, null, 'no');
+        $spikeGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
+        $calmGateway  = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'no');
 
         for ($i = 0; $i < 3; $i++) {
             $this->createPaidOrderForGateway($calmGateway, 1000);
@@ -354,8 +464,8 @@ final class GatewayRouterTest extends DBTestCase
         $threshold = $baseline + 3;
         $this->setSetting('velocity_paid_orders_per_hour', (string)$threshold);
 
-        $spikeGateway = $this->createGateway('tv2-spike-' . uniqid(), 'yes', 100000, null, 'yes');
-        $calmGateway  = $this->createGateway('tv2-calm-' . uniqid(), 'yes', 100000, null, 'no');
+        $spikeGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
+        $calmGateway  = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'no');
 
         $oldPaidAt = date('Y-m-d H:i:s', strtotime('-90 minutes'));
         for ($i = 0; $i < 5; $i++) {
@@ -379,8 +489,8 @@ final class GatewayRouterTest extends DBTestCase
         $threshold = $baseline + 3;
         $this->setSetting('velocity_paid_orders_per_hour', (string)$threshold);
 
-        $gatewayA = $this->createGateway('tv3-a-' . uniqid(), 'yes', 100000, null, 'yes');
-        $gatewayB = $this->createGateway('tv3-b-' . uniqid(), 'yes', 100000, null, 'yes');
+        $gatewayA = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
+        $gatewayB = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'yes');
 
         for ($i = 0; $i < 3; $i++) {
             $this->createPaidOrderForGateway($gatewayA, 1000);
@@ -397,8 +507,8 @@ final class GatewayRouterTest extends DBTestCase
         // sem excecao — mesmo padrao de OrderPricing::intSetting().
         $this->setSetting('velocity_paid_orders_per_hour', 'abc');
 
-        $spikeGateway = $this->createGateway('tv4-spike-' . uniqid(), 'yes', 100000, null, 'yes');
-        $calmGateway  = $this->createGateway('tv4-calm-' . uniqid(), 'yes', 100000, null, 'no');
+        $spikeGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
+        $calmGateway  = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'no');
 
         for ($i = 0; $i < 3; $i++) {
             $this->createPaidOrderForGateway($calmGateway, 1000);
@@ -426,8 +536,8 @@ final class GatewayRouterTest extends DBTestCase
         );
 
         try {
-            $spikeGateway = $this->createGateway('tv5-spike-' . uniqid(), 'yes', 100000, null, 'yes');
-            $calmGateway  = $this->createGateway('tv5-calm-' . uniqid(), 'yes', 100000, null, 'no');
+            $spikeGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, 'yes');
+            $calmGateway  = $this->useGateway(self::SLUG_B, 'yes', 100000, null, 'no');
 
             for ($i = 0; $i < 3; $i++) {
                 $this->createPaidOrderForGateway($calmGateway, 1000);
@@ -446,5 +556,38 @@ final class GatewayRouterTest extends DBTestCase
                 ['velocity_paid_orders_per_hour']
             );
         }
+    }
+
+    /**
+     * Plano 026: gateway enabled='yes' mas SEM credencial completa nao entra
+     * no sorteio, mesmo tendo headroom disponivel — GatewayRouter::pick()
+     * escolhe sempre o outro gateway (com credencial).
+     */
+    public function testEnabledGatewayWithoutCredentialsExcludedFromSorteio(): void
+    {
+        $incompleteGateway = $this->useGateway(self::SLUG_A, 'yes', 100000, null, null, withCredentials: false);
+        $completeGateway   = $this->useGateway(self::SLUG_B, 'yes', 100000);
+
+        for ($i = 0; $i < 20; $i++) {
+            $picked = GatewayRouter::pick();
+            $this->assertSame($completeGateway, $picked['idx'], 'gateway sem credencial nunca deveria ser sorteado');
+        }
+        // sanidade: o gateway sem credencial de fato nao tem credencial completa.
+        $this->assertNotSame($incompleteGateway, $completeGateway);
+    }
+
+    /**
+     * Plano 026: se o UNICO gateway habilitado nao tem credencial completa,
+     * pick() lanca RuntimeException('nenhum gateway habilitado') — mesma
+     * mensagem de "nenhum gateway enabled", de proposito (checkout_controller
+     * ja trata essa string).
+     */
+    public function testAllEnabledGatewaysWithoutCredentialsThrows(): void
+    {
+        $this->useGateway(self::SLUG_A, 'yes', 100000, null, null, withCredentials: false);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('nenhum gateway habilitado');
+        GatewayRouter::pick();
     }
 }
