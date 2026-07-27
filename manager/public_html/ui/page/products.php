@@ -5,7 +5,6 @@ $csrfToken  = htmlspecialchars($_SESSION['_csrf_token'] ?? '', ENT_QUOTES, 'UTF-
 
 $currentQ          = $currentQ ?? '';
 $currentCategory   = $currentCategory ?? '';
-$categories        = $categories ?? [];
 $allCategories     = $allCategories ?? [];
 $defaultCategoryId = $defaultCategoryId ?? 0;
 $currentStock      = $currentStock ?? '';
@@ -82,9 +81,10 @@ $filterParams = array_filter([
                     <label class="orders-filter-label" for="products-filter-categoria">Categoria</label>
                     <select id="products-filter-categoria" name="categoria" class="form-select form-select-sm">
                         <option value="">Todas as categorias</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $currentCategory === $cat ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cat, ENT_QUOTES, 'UTF-8'); ?>
+                        <?php foreach ($allCategories as $cat): ?>
+                            <?php $catName = (string)($cat['name'] ?? ''); ?>
+                            <option value="<?php echo htmlspecialchars($catName, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $currentCategory === $catName ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($catName, ENT_QUOTES, 'UTF-8'); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

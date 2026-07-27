@@ -48,7 +48,7 @@ class products_controller
         [$currentSort, $currentDir, $orderExpr] = $this->resolveSort($info);
         [$conds, $params]                       = $this->buildFilter($info);
 
-        [$categories, $allCategories, $defaultCategoryId] = $this->loadCategoryLists();
+        [$allCategories, $defaultCategoryId] = $this->loadCategoryLists();
 
         try {
             $model = new products_model();
@@ -555,37 +555,22 @@ class products_controller
     }
 
     /**
-     * Duas listas diferentes, de proposito:
-     * - $categories: so as categorias COM produto ativo. Alimenta o dropdown de
-     *   FILTRO — filtrar por categoria vazia so devolveria "nenhum produto
-     *   encontrado".
-     * - $allCategories: todas as categorias ativas (idx + nome). Alimenta os
-     *   <select> dos formularios de criar/editar produto, onde uma categoria
-     *   recem-criada e justamente o que se quer escolher.
-     * Falha aqui so esvazia as listas, nunca a listagem de produtos.
+     * Uma unica lista: todas as categorias ativas (idx + nome). Alimenta o
+     * dropdown de FILTRO, os <select> dos formularios de criar/editar produto e
+     * o modal de categorias — categoria sem nenhum produto tambem aparece, senao
+     * ela some do filtro logo depois de ser criada.
+     * Falha aqui so esvazia a lista, nunca a listagem de produtos.
      *
-     * @return array{0: array<int,string>, 1: array<int,array{idx:int|string,name:string}>, 2: int}
+     * @return array{0: array<int,array{idx:int|string,name:string}>, 1: int}
      */
     private function loadCategoryLists(): array
     {
         try {
-            $catModel = new categories_model();
-
-            $inUseStmt = $catModel->select(
-                [" name "],
-                "WHERE active = 'yes'
-                   AND EXISTS (SELECT 1 FROM products_categories pc
-                               INNER JOIN products p ON p.idx = pc.products_id AND p.active = 'yes'
-                               WHERE pc.active = 'yes' AND pc.categories_id = categories.idx)
-                 ORDER BY name ASC"
-            );
-            $categories = array_column($inUseStmt->fetchAll(PDO::FETCH_ASSOC), 'name');
-
             $allCategories = $this->allCategories();
 
-            return [$categories, $allCategories, $this->resolveDefaultCategoryId($allCategories)];
+            return [$allCategories, $this->resolveDefaultCategoryId($allCategories)];
         } catch (RuntimeException $e) {
-            return [[], [], 0];
+            return [[], 0];
         }
     }
 
