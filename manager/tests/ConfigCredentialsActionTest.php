@@ -22,6 +22,7 @@ final class ConfigCredentialsActionTest extends DBTestCase
     private const SLUG = 'infinitepay';
 
     private ?string $originalCredentialsEnc = null;
+    private string $originalEnabled = 'no';
 
     protected function setUp(): void
     {
@@ -29,11 +30,12 @@ final class ConfigCredentialsActionTest extends DBTestCase
         GatewayCredentials::resetCache();
 
         $model = new payment_gateways_model();
-        $model->set_field([" credentials_enc "]);
+        $model->set_field([" credentials_enc ", " enabled "]);
         $model->set_filter([" active = 'yes' ", " slug = ? "], [self::SLUG]);
         $model->set_paginate([1]);
         $model->load_data(false);
         $this->originalCredentialsEnc = $model->data[0]['credentials_enc'] ?? null;
+        $this->originalEnabled = (string)($model->data[0]['enabled'] ?? 'no');
 
         GatewayCredentials::clear(self::SLUG);
     }
@@ -42,12 +44,23 @@ final class ConfigCredentialsActionTest extends DBTestCase
     {
         $model = new payment_gateways_model();
         $model->execute_raw_prepared(
-            "UPDATE payment_gateways SET credentials_enc = ? WHERE slug = ?",
-            [$this->originalCredentialsEnc, self::SLUG]
+            "UPDATE payment_gateways SET credentials_enc = ?, enabled = ? WHERE slug = ?",
+            [$this->originalCredentialsEnc, $this->originalEnabled, self::SLUG]
         );
 
         GatewayCredentials::resetCache();
         parent::tearDown();
+    }
+
+    private function currentEnabled(): string
+    {
+        $model = new payment_gateways_model();
+        $model->set_field([" enabled "]);
+        $model->set_filter([" active = 'yes' ", " slug = ? "], [self::SLUG]);
+        $model->set_paginate([1]);
+        $model->load_data(false);
+
+        return (string)($model->data[0]['enabled'] ?? 'no');
     }
 
     /**
@@ -122,5 +135,55 @@ final class ConfigCredentialsActionTest extends DBTestCase
         $guardRejects = ($enabled === 'yes' && !GatewayCredentials::isComplete(self::SLUG));
 
         $this->assertFalse($guardRejects, 'guard nao deveria recusar enabled=yes com credencial completa');
+    }
+
+    /**
+     * Reproduz config_controller::clearCredentials(): GatewayCredentials::clear()
+     * seguido de populate(['enabled' => 'no']) na mesma linha (achado da revisao
+     * do plano 026 — este efeito colateral nao tinha teste).
+     */
+    public function testClearCredentialsAlsoDisablesGateway(): void
+    {
+        GatewayCredentials::save(self::SLUG, ['handle' => 'meu_handle']);
+        $update = new payment_gateways_model();
+        $update->set_filter(["slug = ?"], [self::SLUG]);
+        $update->populate(['enabled' => 'yes']);
+        $update->save();
+        $this->assertSame('yes', $this->currentEnabled(), 'fixture precisa comecar habilitada para o teste fazer sentido');
+
+        GatewayCredentials::clear(self::SLUG);
+        $clear = new payment_gateways_model();
+        $clear->set_filter(["slug = ?"], [self::SLUG]);
+        $clear->populate(['enabled' => 'no']);
+        $clear->save();
+
+        $this->assertSame([], GatewayCredentials::get(self::SLUG));
+        $this->assertSame('no', $this->currentEnabled(), 'clearCredentials() deve desabilitar o gateway junto com a credencial');
+    }
+
+    /**
+     * Reproduz o ramo de config_controller::saveCredentials() que desabilita o
+     * gateway quando, depois do save(), a credencial CONTINUA incompleta
+     * (achado da revisao do plano 026 — ramo especifico sem teste ate aqui).
+     */
+    public function testSaveCredentialsDisablesGatewayWhenStillIncomplete(): void
+    {
+        $update = new payment_gateways_model();
+        $update->set_filter(["slug = ?"], [self::SLUG]);
+        $update->populate(['enabled' => 'yes']);
+        $update->save();
+
+        $values = $this->buildCredentialValues(self::SLUG, []); // nenhum campo preenchido
+        GatewayCredentials::save(self::SLUG, $values);
+        $this->assertFalse(GatewayCredentials::isComplete(self::SLUG), 'handle continua vazio apos o save');
+
+        if (!GatewayCredentials::isComplete(self::SLUG)) {
+            $disable = new payment_gateways_model();
+            $disable->set_filter(["slug = ?"], [self::SLUG]);
+            $disable->populate(['enabled' => 'no']);
+            $disable->save();
+        }
+
+        $this->assertSame('no', $this->currentEnabled(), 'gateway deve ficar desabilitado quando a credencial salva continua incompleta');
     }
 }

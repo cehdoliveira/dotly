@@ -128,6 +128,10 @@ class config_controller
                 $mtdByGateway[(int)$row['g']] = (int)$row['mtd'];
             }
 
+            // preload() evita 1 SELECT extra por gateway dentro do masked()/
+            // isComplete() abaixo (achado da revisao do plano 026).
+            GatewayCredentials::preload(array_map(static fn (array $g): string => (string)$g['slug'], $gateways));
+
             foreach ($gateways as &$gateway) {
                 $mtd   = $mtdByGateway[(int)$gateway['idx']] ?? 0;
                 $limit = (int)$gateway['monthly_limit_cents'];
@@ -438,7 +442,10 @@ class config_controller
             } else {
                 $_SESSION["messages_app"]["success"] = ["Credenciais atualizadas com sucesso."];
             }
-        } catch (RuntimeException $e) {
+        } catch (RuntimeException | \JsonException $e) {
+            // \JsonException (achado da revisao do plano 026): GatewayCredentials::save()
+            // usa json_encode(..., JSON_THROW_ON_ERROR), que lanca essa excecao (nao e
+            // subclasse de RuntimeException) se algum campo tiver bytes UTF-8 invalidos.
             $rollback = true;
             Logger::getInstance()->error("config_action(credenciais) failed", ["slug" => $slug, "error" => $e->getMessage()]);
             $_SESSION["messages_app"]["danger"] = ["Falha ao atualizar credenciais."];
