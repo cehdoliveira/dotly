@@ -24,6 +24,12 @@
  * esfriar. Mesma filosofia dos demais filtros: nunca trava a venda — se
  * esvaziar o conjunto ou a query falhar, o filtro e ignorado e um warning e
  * logado.
+ *
+ * Credencial cadastrada (plano 026) e o UNICO filtro que pode travar a venda:
+ * gateway `enabled='yes'` mas sem credencial completa (ver
+ * GatewayCredentials::isComplete()) sai do sorteio sempre, mesmo que isso
+ * esvazie o conjunto — nao ha como cobrar sem credencial, entao mante-lo no
+ * sorteio so trocaria "sem venda" por RuntimeException no meio do checkout.
  */
 final class GatewayRouter
 {
@@ -43,6 +49,35 @@ final class GatewayRouter
         if (empty($gateways)) {
             throw new RuntimeException('nenhum gateway habilitado');
         }
+
+        // Gateway sem credencial completa nao entra no sorteio, mesmo com
+        // enabled='yes' (plano 026): sem token nao ha como cobrar, e manter o
+        // gateway no sorteio so trocaria "sem venda" por RuntimeException no
+        // meio do checkout. E o UNICO filtro desta classe que pode travar a
+        // venda — e isso e deliberado: se nenhum gateway tem chave cadastrada,
+        // a loja realmente nao consegue cobrar.
+        $withCredentials = array_values(array_filter(
+            $gateways,
+            static fn (array $g): bool => GatewayCredentials::isComplete((string)$g['slug'])
+        ));
+
+        if (empty($withCredentials)) {
+            Logger::getInstance()->error('GatewayRouter: nenhum gateway habilitado tem credencial cadastrada', [
+                'slugs_habilitados' => array_map(static fn (array $g): string => (string)$g['slug'], $gateways),
+            ]);
+            throw new RuntimeException('nenhum gateway habilitado');
+        }
+
+        if (count($withCredentials) < count($gateways)) {
+            Logger::getInstance()->warning('GatewayRouter: gateway habilitado sem credencial ignorado no sorteio', [
+                'ignorados' => array_values(array_diff(
+                    array_map(static fn (array $g): string => (string)$g['slug'], $gateways),
+                    array_map(static fn (array $g): string => (string)$g['slug'], $withCredentials)
+                )),
+            ]);
+        }
+
+        $gateways = $withCredentials;
 
         // Teto por valor de pedido (plano 042): gateway com max_order_cents definido
         // nao entra no sorteio para pedidos acima do teto. NULL = sem teto. Se o
