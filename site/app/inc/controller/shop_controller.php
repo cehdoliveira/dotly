@@ -20,9 +20,14 @@ class shop_controller
         $productsModel->set_paginate([1]);
         $productsModel->load_data(false);
         $productsModel->join("images", "product_images", ["products_id" => "idx"], null, [" idx ", " products_id ", " path ", " is_cover ", " sort_order "]);
-        $productsModel->attachCategoryName();
+        $productsModel->attach(["categories"], class_field: [" idx ", " name "]);
 
         $product = $productsModel->data[0] ?? null;
+
+        if ($product !== null) {
+            $linkedCategory       = $product['categories_attach'][0] ?? null;
+            $product['category']  = $linkedCategory['name'] ?? 'Geral';
+        }
 
         if (!$product) {
             if ($wantsJson) {
