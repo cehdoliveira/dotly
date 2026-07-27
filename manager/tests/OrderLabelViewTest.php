@@ -168,6 +168,17 @@ final class OrderLabelViewTest extends TestCase
         $this->assertSame(1, substr_count($html, 'class="label"'), 'não imprime etiqueta de remetente pela metade');
     }
 
+    public function testOmitsSenderLabelWhenStreetMissingDespiteNumberPresent(): void
+    {
+        // sender_street vazio mas sender_number preenchido: antes da correcao,
+        // trim('' . ', ' . '45', ', ') = '45' (nao-vazio) fazia $temRemetente
+        // dar true mesmo com a rua ausente. Checagem tem que ser por campo.
+        $html = $this->renderStrict($this->order(), $this->sender(['sender_street' => '']));
+
+        $this->assertStringContainsString('class="no-sender"', $html, 'sender_street ausente deveria cair no aviso mesmo com sender_number preenchido');
+        $this->assertSame(1, substr_count($html, 'class="label"'), 'não imprime etiqueta de remetente com logradouro ausente');
+    }
+
     public function testEscapesSenderDataToPreventXss(): void
     {
         $html = $this->render($this->order(), $this->sender(['sender_name' => '<script>alert(1)</script>']));

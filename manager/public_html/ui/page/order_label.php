@@ -37,8 +37,16 @@ $remCidadeUf    = trim(trim((string)($sender['sender_city'] ?? '')) . ' - ' . tr
 $remCep         = $fmtCep($sender['sender_zip'] ?? null);
 
 // Etiqueta de remetente só é impressa com o mínimo utilizável preenchido —
-// mesmo conjunto que config_controller::SENDER_REQUIRED_KEYS exige.
-$temRemetente = $remNome !== '' && $remLogradouro !== '' && $remCep !== '' && $remCidadeUf !== '';
+// mesmo conjunto que config_controller::SENDER_REQUIRED_KEYS exige. Checagem
+// campo a campo (nao pelas strings concatenadas $remLogradouro/$remCidadeUf):
+// um unico campo preenchido (ex.: so sender_number) bastaria pra essas strings
+// darem nao-vazias mesmo com sender_street/sender_city ausentes.
+$temRemetente = trim((string)($sender['sender_name'] ?? '')) !== ''
+    && trim((string)($sender['sender_street'] ?? '')) !== ''
+    && trim((string)($sender['sender_number'] ?? '')) !== ''
+    && trim((string)($sender['sender_city'] ?? '')) !== ''
+    && trim((string)($sender['sender_uf'] ?? '')) !== ''
+    && $remCep !== '';
 
 $configUrl = (string)($GLOBALS['config_url'] ?? '');
 ?>
@@ -95,10 +103,6 @@ $configUrl = (string)($GLOBALS['config_url'] ?? '');
             background: #fff;
             border: 2px solid #000;
             padding: 6mm;
-        }
-
-        .label + .label {
-            margin-top: 0;
         }
 
         .no-sender {

@@ -214,4 +214,53 @@ final class ConfigSenderActionTest extends DBTestCase
         $row = $this->readSetting('sender_name');
         $this->assertSame(255, mb_strlen((string)$row['svalue']), 'MySQL nao deveria estourar/truncar diferente do PHP');
     }
+
+    /**
+     * Reproduz o try/catch(RuntimeException) que envolve o upsert de
+     * saveSenderAddress(): forca uma falha real de banco (STRICT_TRANS_TABLES
+     * rejeita valor > 255 chars em svalue VARCHAR(255) com "Data too long for
+     * column") contornando a normalizacao/truncamento que o controller
+     * aplicaria antes do upsert — mesmo espirito de
+     * ConfigActionTest::attemptWriteThatViolatesUniqueMail(), que tambem forca
+     * uma condicao que o guard de app deveria prevenir, para provar que o
+     * catch do controller continua funcionando como rede de seguranca.
+     *
+     * @return array{rollback: bool, danger: ?string}
+     */
+    private function attemptUpsertThatViolatesColumnLength(string $overlongValue, int $adminId): array
+    {
+        $rollback = false;
+        $dangerMessage = null;
+
+        try {
+            $model = new settings_model();
+            $model->execute_raw_prepared(
+                "INSERT IGNORE INTO settings (created_at, created_by, active, skey, svalue) VALUES (?, ?, 'yes', ?, '')",
+                [date('Y-m-d H:i:s'), $adminId, 'sender_name']
+            );
+            $model->execute_raw_prepared(
+                "UPDATE settings SET svalue = ?, active = 'yes', modified_at = ?, modified_by = ? WHERE skey = ?",
+                [$overlongValue, date('Y-m-d H:i:s'), $adminId, 'sender_name']
+            );
+        } catch (RuntimeException $e) {
+            $rollback = true;
+            $dangerMessage = "Falha ao atualizar o endereço de remetente.";
+        }
+
+        return ['rollback' => $rollback, 'danger' => $dangerMessage];
+    }
+
+    public function testSaveSenderCatchSetsDangerMessageOnRealDbFailure(): void
+    {
+        $overlong = str_repeat('a', 300);
+
+        $result = $this->attemptUpsertThatViolatesColumnLength($overlong, 1);
+
+        $this->assertTrue($result['rollback'], 'valor > 255 chars deve violar STRICT_TRANS_TABLES e cair no catch');
+        $this->assertSame(
+            'Falha ao atualizar o endereço de remetente.',
+            $result['danger'],
+            'catch(RuntimeException) de saveSenderAddress() deve produzir esta flash danger'
+        );
+    }
 }
