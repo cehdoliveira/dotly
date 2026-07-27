@@ -92,6 +92,7 @@ final class ProductsViewTest extends TestCase
             ['idx' => 1, 'name' => 'Vestuário'],
             ['idx' => 2, 'name' => 'Calçados'],
         ];
+        $defaultCategoryId = $overrides['defaultCategoryId'] ?? 0;
         $currentStock      = $overrides['currentStock'] ?? '';
         $currentSort       = $overrides['currentSort'] ?? '';
         $currentDir        = $overrides['currentDir'] ?? 'asc';
@@ -99,7 +100,7 @@ final class ProductsViewTest extends TestCase
 
         ob_start();
         try {
-            (function () use ($products, $totalPages, $page, $currentQ, $currentCategory, $categories, $allCategories, $currentStock, $currentSort, $currentDir, $lowStockThreshold) {
+            (function () use ($products, $totalPages, $page, $currentQ, $currentCategory, $categories, $allCategories, $defaultCategoryId, $currentStock, $currentSort, $currentDir, $lowStockThreshold) {
                 include dirname(__DIR__) . '/public_html/ui/page/products.php';
             })();
         } catch (\Throwable $e) {
@@ -251,6 +252,10 @@ final class ProductsViewTest extends TestCase
         $this->assertStringNotContainsString('name="category"', $html, 'o campo de texto de categoria saiu dos formularios');
         $this->assertSame(2, substr_count($html, 'name="categories_id"'), 'os dois modais (criar e editar) tem select de categoria');
         $this->assertStringContainsString('Selecione uma categoria', $html);
+        $this->assertStringContainsString('for="create-product-categoria"', $html, 'label do select de criacao deve estar associado ao campo');
+        $this->assertStringContainsString('id="create-product-categoria"', $html);
+        $this->assertStringContainsString('for="edit-product-categoria"', $html, 'label do select de edicao deve estar associado ao campo');
+        $this->assertStringContainsString('id="edit-product-categoria"', $html);
     }
 
     public function testCategorySelectOptionsAreEscaped(): void
@@ -260,5 +265,27 @@ final class ProductsViewTest extends TestCase
         ]);
 
         $this->assertStringNotContainsString('<script>alert(4)</script>', $html, 'nome de categoria vindo do banco deve ser escapado');
+    }
+
+    public function testCreateModalPreselectsDefaultCategory(): void
+    {
+        $html = $this->renderStrict([
+            'allCategories' => [
+                ['idx' => 1, 'name' => 'Vestuário'],
+                ['idx' => 9, 'name' => 'Geral'],
+            ],
+            'defaultCategoryId' => 9,
+        ]);
+
+        $this->assertMatchesRegularExpression(
+            '/<option value="9"\s+selected>\s*Geral/',
+            $html,
+            'a categoria default (ex.: "Geral") deve vir pre-selecionada no modal de criacao'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/<option value="1"\s+selected>\s*Vestuário/',
+            $html,
+            'so a categoria default deve vir pre-selecionada, nenhuma outra'
+        );
     }
 }

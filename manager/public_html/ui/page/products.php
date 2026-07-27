@@ -271,8 +271,8 @@ $filterParams = array_filter([
                                 <input type="text" name="slug" class="form-control" autocomplete="off">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
-                                <select name="categories_id" class="form-select" required>
+                                <label class="form-label" for="create-product-categoria" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
+                                <select id="create-product-categoria" name="categories_id" class="form-select" required>
                                     <option value="">Selecione uma categoria</option>
                                     <?php foreach ($allCategories as $cat): ?>
                                         <option value="<?php echo (int)$cat['idx']; ?>" <?php echo ((int)$cat['idx'] === $defaultCategoryId) ? 'selected' : ''; ?>>
@@ -335,8 +335,8 @@ $filterParams = array_filter([
                                 <input type="text" name="slug" class="form-control" x-model="editData.slug" autocomplete="off">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
-                                <select name="categories_id" class="form-select" x-model="editData.categoriesId" required>
+                                <label class="form-label" for="edit-product-categoria" style="font-size:0.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Categoria</label>
+                                <select id="edit-product-categoria" name="categories_id" class="form-select" x-model="editData.categoriesId" required>
                                     <option value="">Selecione uma categoria</option>
                                     <?php foreach ($allCategories as $cat): ?>
                                         <option value="<?php echo (int)$cat['idx']; ?>">
