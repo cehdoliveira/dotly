@@ -113,6 +113,9 @@ $dispatcher->add_route("POST", "/config", "config_controller:action", $authGuard
 // Gestão de usuários admin — migrou de /usuarios para dentro de Configurações.
 $dispatcher->add_route("POST", "/config/usuarios", "config_controller:users_action", $authGuard, $params);
 
+// Proxy de CEP (ViaCEP) pro card de Endereço do Remetente.
+$dispatcher->add_route("GET", "/config/cep/([0-9]{8})", "config_controller:cep", $authGuard, $params);
+
 // Gateways foi absorvido por Configurações — mantém a URL antiga viva via redirect.
 $dispatcher->add_route("GET",  "/gateways", "function:basic_redir", $authGuard, $config_url);
 

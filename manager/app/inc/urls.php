@@ -4,6 +4,7 @@ $login_url    = sprintf("%s%s", constant("cFrontend"), "login");
 $logout_url   = sprintf("%s%s", constant("cFrontend"), "sair");
 $config_url   = sprintf("%s%s", constant("cFrontend"), "config");
 $config_users_url = sprintf("%s%s", constant("cFrontend"), "config/usuarios");
+$config_cep_url = sprintf("%s%s", constant("cFrontend"), "config/cep/");
 $password_url = sprintf("%s%s", constant("cFrontend"), "senha");
 $tkpwd_url    = sprintf("%s%s/%s", constant("cFrontend"), "tkpwd", "%s");
 $customers_url     = sprintf("%s%s", constant("cFrontend"), "clientes");

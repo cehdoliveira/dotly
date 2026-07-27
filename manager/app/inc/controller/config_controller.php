@@ -434,6 +434,54 @@ class config_controller
      * `sender_zip` e normalizado para SO DIGITOS e `sender_uf` para maiusculas —
      * a view da etiqueta formata o CEP na hora de imprimir.
      */
+    /**
+     * Proxy de consulta de CEP (ViaCEP), pro card de Endereco do Remetente. Mesmo
+     * motivo do checkout_controller::cep() do site: o CSP (connect-src 'self') nao
+     * libera o browser a chamar viacep.com.br direto. Aqui, diferente do site, a
+     * rota exige $authGuard (area logada do manager, nao publica). Fail-soft: erro
+     * devolve JSON de erro e o front cai pro preenchimento manual.
+     */
+    public function cep(array $info): never
+    {
+        $redis = $GLOBALS['redis'] ?? null;
+        $rateKey = "config_cep:" . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        if (check_and_increment_rate_limit($redis, $rateKey, 30, 60)) {
+            json_response(['error' => 'Muitas consultas de CEP. Aguarde um instante.'], 429);
+        }
+
+        $cep = preg_replace('/\D/', '', (string)($info[1] ?? ''));
+        if (strlen($cep) !== 8) {
+            json_response(['error' => 'CEP inválido.'], 400);
+        }
+
+        $ch = curl_init("https://viacep.com.br/ws/{$cep}/json/");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 4,
+            CURLOPT_CONNECTTIMEOUT => 3,
+        ]);
+        $raw = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if (!is_string($raw) || $httpCode !== 200) {
+            json_response(['error' => 'Consulta de CEP indisponível.'], 502);
+        }
+
+        $data = json_decode($raw, true);
+        // ViaCEP devolve {"erro": true} pra CEP inexistente (com HTTP 200).
+        if (!is_array($data) || !empty($data['erro'])) {
+            json_response(['error' => 'CEP não encontrado.'], 404);
+        }
+
+        json_response([
+            'street'   => (string)($data['logradouro'] ?? ''),
+            'district' => (string)($data['bairro'] ?? ''),
+            'city'     => (string)($data['localidade'] ?? ''),
+            'uf'       => strtoupper((string)($data['uf'] ?? '')),
+        ]);
+    }
+
     private function saveSenderAddress(array $post, int $adminId, string $config_url): never
     {
         $values = [];
