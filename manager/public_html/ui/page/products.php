@@ -384,7 +384,7 @@ $filterParams = array_filter([
                             style="font-size:0.9rem;font-weight:700;color:var(--text);">
                             <i class="bi bi-tags me-2" style="color:var(--accent)" aria-hidden="true"></i>Categorias
                         </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                     </div>
 
                     <div class="modal-body" style="padding:1.25rem;">
@@ -409,16 +409,17 @@ $filterParams = array_filter([
                                     <input x-show="editingCategoryId === cat.idx" x-cloak type="text"
                                         class="form-control form-control-sm flex-grow-1"
                                         x-model="editingCategoryName" maxlength="60"
+                                        :aria-label="'Renomear categoria ' + cat.name"
                                         @keydown.enter.prevent="saveCategory()"
                                         @keydown.escape.prevent="cancelEditCategory()">
 
                                     <template x-if="editingCategoryId !== cat.idx">
                                         <span class="d-flex gap-1">
-                                            <button type="button" class="btn btn-sm btn-action-edit" title="Editar categoria"
+                                            <button type="button" class="btn btn-sm btn-action-edit" title="Editar categoria" aria-label="Editar categoria"
                                                 :disabled="categoriesLoading" @click="startEditCategory(cat)">
                                                 <i class="bi bi-pencil" aria-hidden="true"></i>
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-action-remove" title="Remover categoria"
+                                            <button type="button" class="btn btn-sm btn-action-remove" title="Remover categoria" aria-label="Remover categoria"
                                                 :disabled="categoriesLoading" @click="confirmRemoveCategory(cat)">
                                                 <i class="bi bi-trash" aria-hidden="true"></i>
                                             </button>
@@ -427,11 +428,11 @@ $filterParams = array_filter([
 
                                     <template x-if="editingCategoryId === cat.idx">
                                         <span class="d-flex gap-1">
-                                            <button type="button" class="btn btn-sm btn-primary" title="Salvar"
+                                            <button type="button" class="btn btn-sm btn-primary" title="Salvar" aria-label="Salvar categoria"
                                                 :disabled="categoriesLoading" @click="saveCategory()">
                                                 <i class="bi bi-check-lg" aria-hidden="true"></i>
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-secondary" title="Cancelar"
+                                            <button type="button" class="btn btn-sm btn-secondary" title="Cancelar" aria-label="Cancelar edição"
                                                 :disabled="categoriesLoading" @click="cancelEditCategory()">
                                                 <i class="bi bi-x-lg" aria-hidden="true"></i>
                                             </button>
@@ -442,7 +443,8 @@ $filterParams = array_filter([
                         </ul>
 
                         <div class="d-flex gap-2">
-                            <input type="text" class="form-control form-control-sm" placeholder="Nome da nova categoria"
+                            <label for="new-category-name" class="visually-hidden">Nome da nova categoria</label>
+                            <input type="text" id="new-category-name" class="form-control form-control-sm" placeholder="Nome da nova categoria"
                                 maxlength="60" x-model="newCategoryName" autocomplete="off"
                                 @keydown.enter.prevent="addCategory()">
                             <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
