@@ -28,6 +28,15 @@ final class ProductsValidationTest extends TestCase
         return $method->invoke($controller, $post);
     }
 
+    private function callResolveDefaultCategoryId(array $allCategories): int
+    {
+        $controller = new products_controller();
+        $method     = new ReflectionMethod($controller, 'resolveDefaultCategoryId');
+        $method->setAccessible(true);
+
+        return $method->invoke($controller, $allCategories);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -149,5 +158,31 @@ final class ProductsValidationTest extends TestCase
         $this->assertTrue($valid);
         $this->assertSame(7, $data['categories_id']);
         $this->assertArrayNotHasKey('category', $data, 'validate() nao devolve mais nome de categoria');
+    }
+
+    public function testResolveDefaultCategoryIdFindsGeralByName(): void
+    {
+        $idx = $this->callResolveDefaultCategoryId([
+            ['idx' => 1, 'name' => 'Vestuário'],
+            ['idx' => 9, 'name' => 'Geral'],
+            ['idx' => 2, 'name' => 'Calçados'],
+        ]);
+
+        $this->assertSame(9, $idx);
+    }
+
+    public function testResolveDefaultCategoryIdReturnsZeroWhenGeralIsAbsent(): void
+    {
+        $idx = $this->callResolveDefaultCategoryId([
+            ['idx' => 1, 'name' => 'Vestuário'],
+            ['idx' => 2, 'name' => 'Calçados'],
+        ]);
+
+        $this->assertSame(0, $idx);
+    }
+
+    public function testResolveDefaultCategoryIdReturnsZeroForEmptyList(): void
+    {
+        $this->assertSame(0, $this->callResolveDefaultCategoryId([]));
     }
 }

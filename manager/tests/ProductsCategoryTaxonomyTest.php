@@ -52,6 +52,20 @@ final class ProductsCategoryTaxonomyTest extends DBTestCase
         );
     }
 
+    /**
+     * products_controller::categoryExists() e privado — mesma tecnica de
+     * Reflection usada em ProductsValidationTest::callValidate(), mas aqui
+     * precisa de banco (o metodo consulta categories_model()->select()).
+     */
+    private function categoryExists(int $categoryId): bool
+    {
+        $controller = new products_controller();
+        $method     = new ReflectionMethod($controller, 'categoryExists');
+        $method->setAccessible(true);
+
+        return $method->invoke($controller, $categoryId);
+    }
+
     public function testCategoryNameFieldResolvesLinkedCategory(): void
     {
         $categoryName = 'Peptideos ' . uniqid();
@@ -138,5 +152,28 @@ final class ProductsCategoryTaxonomyTest extends DBTestCase
 
         $this->assertCount(1, $rows);
         $this->assertSame($productA, (int)$rows[0]['idx']);
+    }
+
+    public function testCategoryExistsReturnsTrueForActiveCategory(): void
+    {
+        $categoryId = $this->createCategory();
+
+        $this->assertTrue($this->categoryExists($categoryId));
+    }
+
+    public function testCategoryExistsReturnsFalseForMissingCategory(): void
+    {
+        $this->assertFalse($this->categoryExists(999999999));
+    }
+
+    public function testCategoryExistsReturnsFalseForSoftDeletedCategory(): void
+    {
+        $categoryId = $this->createCategory();
+
+        $update = new categories_model();
+        $update->set_filter([" idx = ? "], [$categoryId]);
+        $update->remove();
+
+        $this->assertFalse($this->categoryExists($categoryId));
     }
 }

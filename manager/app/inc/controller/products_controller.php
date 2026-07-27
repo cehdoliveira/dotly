@@ -48,47 +48,7 @@ class products_controller
         [$currentSort, $currentDir, $orderExpr] = $this->resolveSort($info);
         [$conds, $params]                       = $this->buildFilter($info);
 
-        // Duas listas diferentes, de proposito:
-        // - $categories: so as categorias COM produto ativo. Alimenta o dropdown
-        //   de FILTRO — filtrar por categoria vazia so devolveria "nenhum
-        //   produto encontrado".
-        // - $allCategories: todas as categorias ativas (idx + nome). Alimenta os
-        //   <select> dos formularios de criar/editar produto, onde uma categoria
-        //   recem-criada e justamente o que se quer escolher.
-        // Falha aqui so esvazia as listas, nunca a listagem de produtos.
-        $categories    = [];
-        $allCategories = [];
-        try {
-            $catModel = new categories_model();
-
-            $inUseStmt = $catModel->select(
-                [" name "],
-                "WHERE active = 'yes'
-                   AND EXISTS (SELECT 1 FROM products_categories pc
-                               INNER JOIN products p ON p.idx = pc.products_id AND p.active = 'yes'
-                               WHERE pc.active = 'yes' AND pc.categories_id = categories.idx)
-                 ORDER BY name ASC"
-            );
-            $categories = array_column($inUseStmt->fetchAll(PDO::FETCH_ASSOC), 'name');
-
-            $allStmt = (new categories_model())->select(
-                [" idx ", " name "],
-                "WHERE active = 'yes' ORDER BY name ASC"
-            );
-            $allCategories = $allStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            $defaultCategoryId = 0;
-            foreach ($allCategories as $cat) {
-                if ($cat['name'] === 'Geral') {
-                    $defaultCategoryId = (int)$cat['idx'];
-                    break;
-                }
-            }
-        } catch (RuntimeException $e) {
-            $categories        = [];
-            $allCategories     = [];
-            $defaultCategoryId = 0;
-        }
+        [$categories, $allCategories, $defaultCategoryId] = $this->loadCategoryLists();
 
         try {
             $model = new products_model();
@@ -150,14 +110,11 @@ class products_controller
                 basic_redir($products_url);
             }
 
-            if (!$this->categoryExists((int)$data['categories_id'])) {
-                $_SESSION["messages_app"]["danger"] = ["Categoria inválida. Recarregue a página e tente de novo."];
-                basic_redir($products_url);
-            }
-
             $rollback = false;
 
             try {
+                $this->assertCategoryOrRedirect((int)$data['categories_id'], $products_url);
+
                 $product = new products_model();
                 $product->populate($data);
                 $productId = (int)$product->save();
@@ -194,17 +151,14 @@ class products_controller
             if (!$valid) {
                 basic_redir($products_url);
             }
-
-            if (!$this->categoryExists((int)$data['categories_id'])) {
-                $_SESSION["messages_app"]["danger"] = ["Categoria inválida. Recarregue a página e tente de novo."];
-                basic_redir($products_url);
-            }
         }
 
         $rollback = false;
 
         try {
             if ($action === 'editar') {
+                $this->assertCategoryOrRedirect((int)$data['categories_id'], $products_url);
+
                 $update = new products_model();
                 $update->set_filter(["idx = ?"], [$idx]);
                 $update->populate($data);
@@ -392,6 +346,78 @@ class products_controller
             'price_unit_cents' => $priceUnitCents,
             'stock'            => $stock,
         ]];
+    }
+
+    /**
+     * Acha o idx da categoria "Geral" em $allCategories, pra pre-selecionar o
+     * <select> do modal de criacao — todo produto cadastrado sem escolha
+     * explicita cai nela. 0 se "Geral" nao estiver na lista (ex.: falha ao
+     * carregar categorias, ou a seed da migration 018 ainda nao rodou).
+     *
+     * @param array<int,array{idx:int|string,name:string}> $allCategories
+     */
+    private function resolveDefaultCategoryId(array $allCategories): int
+    {
+        foreach ($allCategories as $cat) {
+            if ($cat['name'] === 'Geral') {
+                return (int)$cat['idx'];
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Duas listas diferentes, de proposito:
+     * - $categories: so as categorias COM produto ativo. Alimenta o dropdown de
+     *   FILTRO — filtrar por categoria vazia so devolveria "nenhum produto
+     *   encontrado".
+     * - $allCategories: todas as categorias ativas (idx + nome). Alimenta os
+     *   <select> dos formularios de criar/editar produto, onde uma categoria
+     *   recem-criada e justamente o que se quer escolher.
+     * Falha aqui so esvazia as listas, nunca a listagem de produtos.
+     *
+     * @return array{0: array<int,string>, 1: array<int,array{idx:int|string,name:string}>, 2: int}
+     */
+    private function loadCategoryLists(): array
+    {
+        try {
+            $catModel = new categories_model();
+
+            $inUseStmt = $catModel->select(
+                [" name "],
+                "WHERE active = 'yes'
+                   AND EXISTS (SELECT 1 FROM products_categories pc
+                               INNER JOIN products p ON p.idx = pc.products_id AND p.active = 'yes'
+                               WHERE pc.active = 'yes' AND pc.categories_id = categories.idx)
+                 ORDER BY name ASC"
+            );
+            $categories = array_column($inUseStmt->fetchAll(PDO::FETCH_ASSOC), 'name');
+
+            $allStmt = (new categories_model())->select(
+                [" idx ", " name "],
+                "WHERE active = 'yes' ORDER BY name ASC"
+            );
+            $allCategories = $allStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return [$categories, $allCategories, $this->resolveDefaultCategoryId($allCategories)];
+        } catch (RuntimeException $e) {
+            return [[], [], 0];
+        }
+    }
+
+    /**
+     * Categoria invalida/inativa redireciona com mensagem, sem lancar —
+     * chamado de dentro do try/catch de action() (criar/editar) pra que uma
+     * falha de banco em categoryExists() caia no mesmo catch(RuntimeException)
+     * que ja loga+mensagem+rollback, em vez de subir sem tratamento.
+     */
+    private function assertCategoryOrRedirect(int $categoryId, string $redirectUrl): void
+    {
+        if (!$this->categoryExists($categoryId)) {
+            $_SESSION["messages_app"]["danger"] = ["Categoria inválida. Recarregue a página e tente de novo."];
+            basic_redir($redirectUrl);
+        }
     }
 
     /**
