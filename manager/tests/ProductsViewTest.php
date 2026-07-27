@@ -67,6 +67,7 @@ final class ProductsViewTest extends TestCase
             'name'             => 'Camisa Polo',
             'slug'             => 'camisa-polo',
             'category'         => 'Vestuário',
+            'categories_id'    => 1,
             'price_unit_cents' => 7000,
             'stock'            => 50,
             'cover_path'       => null,
@@ -87,6 +88,11 @@ final class ProductsViewTest extends TestCase
         $currentQ          = $overrides['currentQ'] ?? '';
         $currentCategory   = $overrides['currentCategory'] ?? '';
         $categories        = $overrides['categories'] ?? ['Vestuário', 'Calçados'];
+        $allCategories     = $overrides['allCategories'] ?? [
+            ['idx' => 1, 'name' => 'Vestuário'],
+            ['idx' => 2, 'name' => 'Calçados'],
+        ];
+        $defaultCategoryId = $overrides['defaultCategoryId'] ?? 0;
         $currentStock      = $overrides['currentStock'] ?? '';
         $currentSort       = $overrides['currentSort'] ?? '';
         $currentDir        = $overrides['currentDir'] ?? 'asc';
@@ -94,7 +100,7 @@ final class ProductsViewTest extends TestCase
 
         ob_start();
         try {
-            (function () use ($products, $totalPages, $page, $currentQ, $currentCategory, $categories, $currentStock, $currentSort, $currentDir, $lowStockThreshold) {
+            (function () use ($products, $totalPages, $page, $currentQ, $currentCategory, $categories, $allCategories, $defaultCategoryId, $currentStock, $currentSort, $currentDir, $lowStockThreshold) {
                 include dirname(__DIR__) . '/public_html/ui/page/products.php';
             })();
         } catch (\Throwable $e) {
@@ -237,5 +243,49 @@ final class ProductsViewTest extends TestCase
         $this->assertStringContainsString('q=camisa', $html, 'paginacao deve preservar a busca por nome');
         $this->assertStringContainsString('categoria=Vestu', $html, 'paginacao deve preservar a categoria filtrada');
         $this->assertStringContainsString('sort=preco', $html, 'paginacao deve preservar a ordenacao ativa');
+    }
+
+    public function testProductFormsRenderCategorySelectFromTaxonomy(): void
+    {
+        $html = $this->renderStrict();
+
+        $this->assertStringNotContainsString('name="category"', $html, 'o campo de texto de categoria saiu dos formularios');
+        $this->assertSame(2, substr_count($html, 'name="categories_id"'), 'os dois modais (criar e editar) tem select de categoria');
+        $this->assertStringContainsString('Selecione uma categoria', $html);
+        $this->assertStringContainsString('for="create-product-categoria"', $html, 'label do select de criacao deve estar associado ao campo');
+        $this->assertStringContainsString('id="create-product-categoria"', $html);
+        $this->assertStringContainsString('for="edit-product-categoria"', $html, 'label do select de edicao deve estar associado ao campo');
+        $this->assertStringContainsString('id="edit-product-categoria"', $html);
+    }
+
+    public function testCategorySelectOptionsAreEscaped(): void
+    {
+        $html = $this->renderStrict([
+            'allCategories' => [['idx' => 1, 'name' => '"><script>alert(4)</script>']],
+        ]);
+
+        $this->assertStringNotContainsString('<script>alert(4)</script>', $html, 'nome de categoria vindo do banco deve ser escapado');
+    }
+
+    public function testCreateModalPreselectsDefaultCategory(): void
+    {
+        $html = $this->renderStrict([
+            'allCategories' => [
+                ['idx' => 1, 'name' => 'Vestuário'],
+                ['idx' => 9, 'name' => 'Geral'],
+            ],
+            'defaultCategoryId' => 9,
+        ]);
+
+        $this->assertMatchesRegularExpression(
+            '/<option value="9"\s+selected>\s*Geral/',
+            $html,
+            'a categoria default (ex.: "Geral") deve vir pre-selecionada no modal de criacao'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/<option value="1"\s+selected>\s*Vestuário/',
+            $html,
+            'so a categoria default deve vir pre-selecionada, nenhuma outra'
+        );
     }
 }

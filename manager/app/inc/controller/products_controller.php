@@ -15,7 +15,7 @@ class products_controller
      */
     private const SORTABLE = [
         'nome'      => ' name ',
-        'categoria' => ' category ',
+        'categoria' => " (SELECT c.name FROM categories c INNER JOIN products_categories pc ON pc.categories_id = c.idx AND pc.active = 'yes' WHERE pc.products_id = products.idx AND c.active = 'yes' ORDER BY pc.idx DESC LIMIT 1) ",
         'preco'     => ' price_unit_cents ',
         'estoque'   => ' stock ',
     ];
@@ -48,20 +48,7 @@ class products_controller
         [$currentSort, $currentDir, $orderExpr] = $this->resolveSort($info);
         [$conds, $params]                       = $this->buildFilter($info);
 
-        // Opcoes do dropdown de categoria: as categorias distintas em uso. Falha
-        // aqui so esvazia o dropdown, nunca a listagem de produtos.
-        $categories = [];
-        try {
-            $catStmt = (new products_model())->select(
-                [" DISTINCT category "],
-                "WHERE active = 'yes' AND category <> '' ORDER BY category ASC"
-            );
-            foreach ($catStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $categories[] = $row['category'];
-            }
-        } catch (RuntimeException $e) {
-            $categories = [];
-        }
+        [$categories, $allCategories, $defaultCategoryId] = $this->loadCategoryLists();
 
         try {
             $model = new products_model();
@@ -73,16 +60,21 @@ class products_controller
             );
             $total_products = (int)($countStmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
 
-            $model->set_field([" idx ", " name ", " slug ", " category ", " dosage ", " price_unit_cents ", " stock "]);
+            $model->set_field([" idx ", " name ", " slug ", " dosage ", " price_unit_cents ", " stock "]);
             $model->set_filter($conds, $params);
             $model->set_order([$orderExpr]);
             $model->set_paginate([$offset, $perPage]);
             $model->load_data(false);
             $model->join('images', 'product_images', ['products_id' => 'idx'], null, [' idx ', ' products_id ', ' path ', ' is_cover ', ' sort_order ']);
+            $model->attach(["categories"], class_field: [" idx ", " name "]);
             $products = $model->data;
 
             foreach ($products as &$product) {
                 $product['cover_path'] = $this->coverPath($product['images_attach'] ?? []);
+
+                $linkedCategory          = $product['categories_attach'][0] ?? null;
+                $product['category']      = $linkedCategory['name'] ?? 'Geral';
+                $product['categories_id'] = $linkedCategory['idx']  ?? null;
             }
             unset($product);
         } catch (RuntimeException $e) {
@@ -121,9 +113,20 @@ class products_controller
             $rollback = false;
 
             try {
+                $this->assertCategoryOrRedirect((int)$data['categories_id'], $products_url);
+
                 $product = new products_model();
                 $product->populate($data);
                 $productId = (int)$product->save();
+
+                // Liga o produto a categoria na tabela de attach. save_attach()
+                // desativa as ligacoes anteriores e insere/reativa a escolhida —
+                // ver DOLModel.php:541-578. O nome da tabela de juncao
+                // (`products_categories`) e das colunas e derivado por ele.
+                $product->save_attach(
+                    ["idx" => $productId, "post" => ["categories_id" => (int)$data['categories_id']]],
+                    ["categories"]
+                );
 
                 $this->savePhotos($productId);
 
@@ -154,10 +157,17 @@ class products_controller
 
         try {
             if ($action === 'editar') {
+                $this->assertCategoryOrRedirect((int)$data['categories_id'], $products_url);
+
                 $update = new products_model();
                 $update->set_filter(["idx = ?"], [$idx]);
                 $update->populate($data);
                 $update->save();
+
+                $update->save_attach(
+                    ["idx" => $idx, "post" => ["categories_id" => (int)$data['categories_id']]],
+                    ["categories"]
+                );
 
                 $this->savePhotos($idx);
 
@@ -205,7 +215,7 @@ class products_controller
         $catRaw   = $info['get']['categoria'] ?? '';
         $category = is_string($catRaw) ? trim($catRaw) : '';
         if ($category !== '') {
-            $conds[]  = " category = ? ";
+            $conds[]  = " idx IN (SELECT pc.products_id FROM products_categories pc INNER JOIN categories c ON c.idx = pc.categories_id AND c.active = 'yes' WHERE pc.active = 'yes' AND c.name = ?) ";
             $params[] = $category;
         }
 
@@ -292,13 +302,12 @@ class products_controller
             return [false, []];
         }
 
-        $categoryName = trim(preg_replace('/\s+/', ' ', (string)($post['category'] ?? '')));
-        if ($categoryName === '') {
-            $_SESSION["messages_app"]["danger"] = ["Informe a categoria."];
-            return [false, []];
-        }
-        if (mb_strlen($categoryName) > 60) {
-            $_SESSION["messages_app"]["danger"] = ["Categoria deve ter no máximo 60 caracteres."];
+        // O form manda o IDX da categoria (<select>), nao o nome. A existencia da
+        // categoria e checada em action(), que ja esta num contexto de banco —
+        // validate() fica puro (sem I/O), como o resto deste metodo.
+        $categoryId = (int)($post['categories_id'] ?? 0);
+        if ($categoryId <= 0) {
+            $_SESSION["messages_app"]["danger"] = ["Selecione uma categoria."];
             return [false, []];
         }
 
@@ -332,11 +341,100 @@ class products_controller
         return [true, [
             'name'             => $name,
             'slug'             => $slug,
-            'category'         => $categoryName,
+            'categories_id'    => $categoryId,
             'dosage'           => $dosage,
             'price_unit_cents' => $priceUnitCents,
             'stock'            => $stock,
         ]];
+    }
+
+    /**
+     * Acha o idx da categoria "Geral" em $allCategories, pra pre-selecionar o
+     * <select> do modal de criacao — todo produto cadastrado sem escolha
+     * explicita cai nela. 0 se "Geral" nao estiver na lista (ex.: falha ao
+     * carregar categorias, ou a seed da migration 018 ainda nao rodou).
+     *
+     * @param array<int,array{idx:int|string,name:string}> $allCategories
+     */
+    private function resolveDefaultCategoryId(array $allCategories): int
+    {
+        foreach ($allCategories as $cat) {
+            if ($cat['name'] === 'Geral') {
+                return (int)$cat['idx'];
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Duas listas diferentes, de proposito:
+     * - $categories: so as categorias COM produto ativo. Alimenta o dropdown de
+     *   FILTRO — filtrar por categoria vazia so devolveria "nenhum produto
+     *   encontrado".
+     * - $allCategories: todas as categorias ativas (idx + nome). Alimenta os
+     *   <select> dos formularios de criar/editar produto, onde uma categoria
+     *   recem-criada e justamente o que se quer escolher.
+     * Falha aqui so esvazia as listas, nunca a listagem de produtos.
+     *
+     * @return array{0: array<int,string>, 1: array<int,array{idx:int|string,name:string}>, 2: int}
+     */
+    private function loadCategoryLists(): array
+    {
+        try {
+            $catModel = new categories_model();
+
+            $inUseStmt = $catModel->select(
+                [" name "],
+                "WHERE active = 'yes'
+                   AND EXISTS (SELECT 1 FROM products_categories pc
+                               INNER JOIN products p ON p.idx = pc.products_id AND p.active = 'yes'
+                               WHERE pc.active = 'yes' AND pc.categories_id = categories.idx)
+                 ORDER BY name ASC"
+            );
+            $categories = array_column($inUseStmt->fetchAll(PDO::FETCH_ASSOC), 'name');
+
+            $allStmt = (new categories_model())->select(
+                [" idx ", " name "],
+                "WHERE active = 'yes' ORDER BY name ASC"
+            );
+            $allCategories = $allStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return [$categories, $allCategories, $this->resolveDefaultCategoryId($allCategories)];
+        } catch (RuntimeException $e) {
+            return [[], [], 0];
+        }
+    }
+
+    /**
+     * Categoria invalida/inativa redireciona com mensagem, sem lancar —
+     * chamado de dentro do try/catch de action() (criar/editar) pra que uma
+     * falha de banco em categoryExists() caia no mesmo catch(RuntimeException)
+     * que ja loga+mensagem+rollback, em vez de subir sem tratamento.
+     */
+    private function assertCategoryOrRedirect(int $categoryId, string $redirectUrl): void
+    {
+        if (!$this->categoryExists($categoryId)) {
+            $_SESSION["messages_app"]["danger"] = ["Categoria inválida. Recarregue a página e tente de novo."];
+            basic_redir($redirectUrl);
+        }
+    }
+
+    /**
+     * A categoria escolhida no form existe e esta ativa?
+     * Checagem por conta propria em vez de FK: a relacao produto<->categoria mora
+     * na tabela de attach `products_categories`, sem FOREIGN KEY (convencao do
+     * projeto), entao o banco nao recusaria um idx inexistente.
+     */
+    private function categoryExists(int $categoryId): bool
+    {
+        $stmt = (new categories_model())->select(
+            [" idx "],
+            "WHERE active = 'yes' AND idx = ?",
+            [$categoryId]
+        );
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
     }
 
     /**

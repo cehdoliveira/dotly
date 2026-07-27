@@ -31,7 +31,6 @@ final class CartHydrateTest extends DBTestCase
         $model->populate(array_merge([
             'name'             => 'Produto Teste ' . uniqid(),
             'slug'             => 'produto-teste-' . uniqid(),
-            'category'         => 'peptideos',
             'price_unit_cents' => 5000,
             'box_qty'          => 10,
             'stock'            => 100,
@@ -108,5 +107,38 @@ final class CartHydrateTest extends DBTestCase
 
         $this->assertSame([], $lines);
         $this->assertSame(0, $totalCents);
+    }
+
+    public function testCartLineCarriesCategoryNameFromTaxonomy(): void
+    {
+        $categoryName = 'Diluente ' . uniqid();
+
+        $category = new categories_model();
+        $category->populate(['name' => $categoryName]);
+        $categoryId = (int)$category->save();
+        $this->assertGreaterThan(0, $categoryId);
+
+        $productId = $this->createProduct();
+
+        $product = new products_model();
+        $product->save_attach(
+            ["idx" => $productId, "post" => ["categories_id" => $categoryId]],
+            ["categories"]
+        );
+
+        Cart::add($productId, 'unit', 1);
+        [$lines, ] = Cart::hydrate();
+
+        $this->assertSame($categoryName, $lines[0]['category']);
+    }
+
+    public function testCartLineFallsBackToGeralWithoutCategoryLink(): void
+    {
+        $productId = $this->createProduct();
+
+        Cart::add($productId, 'unit', 1);
+        [$lines, ] = Cart::hydrate();
+
+        $this->assertSame('Geral', $lines[0]['category']);
     }
 }

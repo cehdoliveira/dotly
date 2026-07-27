@@ -125,12 +125,15 @@ class Cart
         $placeholders = implode(',', array_fill(0, count($productIds), '?'));
 
         $model = new products_model();
-        $model->set_field([" idx ", " name ", " category ", " price_unit_cents ", " box_qty "]);
+        $model->set_field([" idx ", " name ", " price_unit_cents ", " box_qty "]);
         $model->set_filter([" active = 'yes' ", " idx IN ($placeholders) "], $productIds);
         $model->load_data(false);
+        $model->attach(["categories"], class_field: [" idx ", " name "]);
 
         $productsById = [];
         foreach ($model->data as $product) {
+            $linkedCategory      = $product["categories_attach"][0] ?? null;
+            $product["category"] = $linkedCategory["name"] ?? "Geral";
             $productsById[(int)$product["idx"]] = $product;
         }
 

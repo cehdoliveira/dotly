@@ -15,7 +15,7 @@ class site_controller
         }
 
         if ($cat !== '') {
-            $filters[] = " category = ? ";
+            $filters[]      = " idx IN (SELECT pc.products_id FROM products_categories pc INNER JOIN categories c ON c.idx = pc.categories_id AND c.active = 'yes' WHERE pc.active = 'yes' AND c.name = ?) ";
             $filterParams[] = $cat;
         }
 
@@ -24,6 +24,7 @@ class site_controller
         $productsModel->set_order([" sort_order asc ", " name asc "]);
         $productsModel->load_data(false);
         $productsModel->join("images", "product_images", ["products_id" => "idx"], null, [" idx ", " products_id ", " path ", " is_cover ", " sort_order "]);
+        $productsModel->attach(["categories"], class_field: [" idx ", " name "]);
         $products = $productsModel->data;
 
         // Capa de cada produto: a imagem marcada is_cover='yes', ou a primeira
@@ -38,15 +39,26 @@ class site_controller
                 }
             }
             $product['cover_image'] = $cover ?? ($images[0] ?? null);
+
+            $linkedCategory     = $product['categories_attach'][0] ?? null;
+            $product['category'] = $linkedCategory['name'] ?? 'Geral';
         }
         unset($product);
 
-        $categoriesModel = new products_model();
-        $categoriesStmt = $categoriesModel->select(
-            [" DISTINCT category "],
-            "WHERE active = 'yes' ORDER BY category ASC"
+        // Chips da home: so categorias COM produto ativo. Preserva o
+        // comportamento do antigo "SELECT DISTINCT products.category" — uma
+        // categoria recem-criada no manager, ainda sem produto, nao vira chip
+        // vazio na vitrine.
+        $categoriesModel = new categories_model();
+        $categoriesStmt  = $categoriesModel->select(
+            [" name "],
+            "WHERE active = 'yes'
+               AND EXISTS (SELECT 1 FROM products_categories pc
+                           INNER JOIN products p ON p.idx = pc.products_id AND p.active = 'yes'
+                           WHERE pc.active = 'yes' AND pc.categories_id = categories.idx)
+             ORDER BY name ASC"
         );
-        $categories = array_column($categoriesStmt->fetchAll(\PDO::FETCH_ASSOC), 'category');
+        $categories = array_column($categoriesStmt->fetchAll(\PDO::FETCH_ASSOC), 'name');
 
         $alpineControllers = ['home', 'shop'];
 

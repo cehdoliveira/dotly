@@ -52,7 +52,8 @@ final class ProductsFilterTest extends TestCase
         [$conds, $params] = $this->buildFilter(['get' => ['categoria' => 'Vestuário']]);
 
         $joined = implode(' ', $conds);
-        $this->assertStringContainsString('category = ?', $joined, 'categoria e correspondencia exata, nao LIKE');
+        $this->assertStringContainsString('products_categories', $joined, 'a categoria e resolvida pela tabela de attach');
+        $this->assertStringContainsString('c.name = ?', $joined, 'categoria e correspondencia exata pelo nome, nao LIKE');
         $this->assertSame(['Vestuário'], $params);
     }
 
@@ -62,7 +63,8 @@ final class ProductsFilterTest extends TestCase
 
         $joined = implode(' ', $conds);
         $this->assertStringContainsString('name LIKE ?', $joined);
-        $this->assertStringContainsString('category = ?', $joined);
+        $this->assertStringContainsString('products_categories', $joined, 'a categoria e resolvida pela tabela de attach');
+        $this->assertStringContainsString('c.name = ?', $joined, 'categoria e correspondencia exata pelo nome, nao LIKE');
         // Ordem: nome antes de categoria (mesma ordem do bind).
         $this->assertSame(['%polo%', 'Vestuário'], $params);
     }
