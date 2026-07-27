@@ -2,6 +2,30 @@
 class config_controller
 {
     /**
+     * Chaves de `settings` do endereco de remetente da loja (plano 025).
+     * Ordem = ordem dos placeholders da query de leitura em index().
+     * ATENCAO: esta lista existe DUPLICADA em orders_controller::loadSenderAddress()
+     * e como default da view ui/page/config.php. Nao ha helper compartilhado de
+     * proposito: app/inc/lib e app/inc/model tem que ser byte-identicos com
+     * site/ (bin/check-shared-sync.sh), e o site nao usa remetente.
+     *
+     * @var list<string>
+     */
+    private const SENDER_KEYS = [
+        'sender_name', 'sender_zip', 'sender_street', 'sender_number',
+        'sender_complement', 'sender_district', 'sender_city', 'sender_uf',
+    ];
+
+    /** Campos que precisam estar preenchidos quando o form nao vem 100% vazio. */
+    private const SENDER_REQUIRED_KEYS = [
+        'sender_name', 'sender_zip', 'sender_street', 'sender_number',
+        'sender_city', 'sender_uf',
+    ];
+
+    /** svalue e VARCHAR(255): trunca em vez de estourar o INSERT. */
+    private const SENDER_FIELD_MAX_LENGTH = 255;
+
+    /**
      * Tela de Configurações do manager: dados da conta do Admin logado + ajuste de
      * `enabled`/`monthly_limit_cents` por gateway. As Keys/credenciais dos gateways NAO
      * sao geridas aqui — permanecem em constantes do kernel.php (MP_ACCESS_TOKEN,
@@ -33,6 +57,10 @@ class config_controller
             'sales_window_end_at'   => '',
         ];
         $salesStatus = ['open' => true, 'reopens_at' => null, 'reason' => null];
+
+        // Plano 025: remetente da loja (etiqueta de envio). Default vazio =
+        // nao cadastrado; a view e a etiqueta lidam com isso.
+        $senderSettings = array_fill_keys(self::SENDER_KEYS, '');
 
         // Gestao de usuarios admin — migrou de /usuarios (plano 023). Carregada num
         // try proprio para uma falha aqui nao derrubar dados da conta + gateways.
@@ -118,6 +146,17 @@ class config_controller
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 $salesSettings[$row['skey']] = (string) $row['svalue'];
             }
+
+            $senderStmt = $settingsModel->select(
+                [" skey ", " svalue "],
+                "WHERE active = 'yes' AND skey IN (?, ?, ?, ?, ?, ?, ?, ?)",
+                self::SENDER_KEYS
+            );
+            foreach ($senderStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                if (array_key_exists($row['skey'], $senderSettings)) {
+                    $senderSettings[$row['skey']] = (string) $row['svalue'];
+                }
+            }
             $salesStatus = SalesWindow::status();
         } catch (RuntimeException $e) {
             $user     = $user ?: [];
@@ -155,6 +194,8 @@ class config_controller
             $this->saveGateway($post, $config_url);
         } elseif ($action === 'janela') {
             $this->saveSalesWindow($post, $adminId, $config_url);
+        } elseif ($action === 'remetente') {
+            $this->saveSenderAddress($post, $adminId, $config_url);
         }
 
         basic_redir($config_url);
@@ -379,6 +420,75 @@ class config_controller
             $rollback = true;
             Logger::getInstance()->error("config_action(janela) failed", ["error" => $e->getMessage()]);
             $_SESSION["messages_app"]["danger"] = ["Falha ao atualizar a janela de vendas."];
+        }
+
+        basic_redir($config_url, rollback: $rollback);
+    }
+
+    /**
+     * Plano 025: endereco de remetente da loja, usado na 2a etiqueta de
+     * /pedidos/{idx}/etiqueta. Regra: tudo-ou-nada. Form 100% vazio limpa o
+     * remetente (etiqueta volta a imprimir so o destinatario); qualquer campo
+     * preenchido exige o conjunto minimo de SENDER_REQUIRED_KEYS valido.
+     *
+     * `sender_zip` e normalizado para SO DIGITOS e `sender_uf` para maiusculas —
+     * a view da etiqueta formata o CEP na hora de imprimir.
+     */
+    private function saveSenderAddress(array $post, int $adminId, string $config_url): never
+    {
+        $values = [];
+        foreach (self::SENDER_KEYS as $key) {
+            $values[$key] = mb_substr(trim((string)($post[$key] ?? '')), 0, self::SENDER_FIELD_MAX_LENGTH);
+        }
+
+        $values['sender_zip'] = preg_replace('/\D+/', '', $values['sender_zip']) ?? '';
+        $values['sender_uf']  = mb_strtoupper($values['sender_uf']);
+
+        $filled = array_filter($values, static fn(string $v): bool => $v !== '');
+
+        if ($filled !== []) {
+            foreach (self::SENDER_REQUIRED_KEYS as $key) {
+                if ($values[$key] === '') {
+                    $_SESSION["messages_app"]["danger"] = ["Preencha nome, CEP, logradouro, número, cidade e UF do remetente (ou deixe todos os campos vazios para remover o remetente)."];
+                    basic_redir($config_url);
+                }
+            }
+            if (strlen($values['sender_zip']) !== 8) {
+                $_SESSION["messages_app"]["danger"] = ["CEP do remetente inválido: informe 8 dígitos."];
+                basic_redir($config_url);
+            }
+            if (preg_match('/^[A-Z]{2}$/', $values['sender_uf']) !== 1) {
+                $_SESSION["messages_app"]["danger"] = ["UF do remetente inválida: informe 2 letras (ex.: SP)."];
+                basic_redir($config_url);
+            }
+        }
+
+        $rollback = false;
+
+        try {
+            $model = new settings_model();
+            foreach ($values as $key => $value) {
+                // Mesmo upsert 2-passos de saveSalesWindow(): INSERT IGNORE cobre
+                // base sem o seed da migration 015; UPDATE grava, reativa
+                // soft-delete (UNIQUE de skey abrange linha removida) e carimba
+                // modified_at em PHP.
+                $model->execute_raw_prepared(
+                    "INSERT IGNORE INTO settings (created_at, created_by, active, skey, svalue) VALUES (?, ?, 'yes', ?, '')",
+                    [date('Y-m-d H:i:s'), $adminId, $key]
+                );
+                $model->execute_raw_prepared(
+                    "UPDATE settings SET svalue = ?, active = 'yes', modified_at = ?, modified_by = ? WHERE skey = ?",
+                    [$value, date('Y-m-d H:i:s'), $adminId, $key]
+                );
+            }
+
+            $_SESSION["messages_app"]["success"] = $filled === []
+                ? ["Endereço de remetente removido."]
+                : ["Endereço de remetente atualizado."];
+        } catch (RuntimeException $e) {
+            $rollback = true;
+            Logger::getInstance()->error("config_action(remetente) failed", ["error" => $e->getMessage()]);
+            $_SESSION["messages_app"]["danger"] = ["Falha ao atualizar o endereço de remetente."];
         }
 
         basic_redir($config_url, rollback: $rollback);

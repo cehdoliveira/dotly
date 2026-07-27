@@ -31,6 +31,17 @@ $salesReasonLabel = $salesReasonLabels[$salesStatus['reason'] ?? ''] ?? null;
 
 $f_sales_start = htmlspecialchars(str_replace(' ', 'T', substr((string)$salesSettings['sales_window_start_at'], 0, 16)), ENT_QUOTES, 'UTF-8');
 $f_sales_end   = htmlspecialchars(str_replace(' ', 'T', substr((string)$salesSettings['sales_window_end_at'], 0, 16)), ENT_QUOTES, 'UTF-8');
+
+// Plano 025: remetente da loja (2a etiqueta de /pedidos/{idx}/etiqueta). A lista
+// de chaves espelha config_controller::SENDER_KEYS.
+$senderSettings = $senderSettings ?? [
+    'sender_name' => '', 'sender_zip' => '', 'sender_street' => '', 'sender_number' => '',
+    'sender_complement' => '', 'sender_district' => '', 'sender_city' => '', 'sender_uf' => '',
+];
+$f_sender = [];
+foreach ($senderSettings as $senderKey => $senderValue) {
+    $f_sender[$senderKey] = htmlspecialchars((string)$senderValue, ENT_QUOTES, 'UTF-8');
+}
 ?>
 
 <div class="manager-layout" x-data="dashboardController()" x-init="init()">
@@ -180,6 +191,63 @@ $f_sales_end   = htmlspecialchars(str_replace(' ', 'T', substr((string)$salesSet
                         </form>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Endereço do remetente (etiqueta de envio) -->
+        <div class="content-panel mb-4">
+            <div class="content-panel-header">
+                <i class="bi bi-box-seam" aria-hidden="true"></i> Endereço do Remetente
+            </div>
+            <div class="content-panel-body">
+                <p style="font-size:0.85rem;color:var(--text-muted);">
+                    Esse endereço é impresso como <strong>segunda etiqueta</strong> junto do endereço do
+                    pedido em <em>Pedidos → Gerar etiqueta de envio</em>. Deixe todos os campos vazios
+                    para não imprimir remetente.
+                </p>
+                <form method="POST" action="<?php echo htmlspecialchars($GLOBALS['config_url'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="_csrf_token" value="<?php echo $csrfToken; ?>">
+                    <input type="hidden" name="action" value="remetente">
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label" for="snd-name">Nome / Razão social</label>
+                            <input type="text" class="form-control" id="snd-name" name="sender_name" maxlength="255" value="<?php echo $f_sender['sender_name']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-4 col-lg-2">
+                            <label class="form-label" for="snd-zip">CEP</label>
+                            <input type="text" class="form-control" id="snd-zip" name="sender_zip" inputmode="numeric" maxlength="9" placeholder="12345-678" value="<?php echo $f_sender['sender_zip']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-8 col-lg-4">
+                            <label class="form-label" for="snd-street">Logradouro</label>
+                            <input type="text" class="form-control" id="snd-street" name="sender_street" maxlength="255" value="<?php echo $f_sender['sender_street']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-4 col-lg-2">
+                            <label class="form-label" for="snd-number">Número</label>
+                            <input type="text" class="form-control" id="snd-number" name="sender_number" maxlength="20" value="<?php echo $f_sender['sender_number']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-8 col-lg-4">
+                            <label class="form-label" for="snd-complement">Complemento</label>
+                            <input type="text" class="form-control" id="snd-complement" name="sender_complement" maxlength="255" value="<?php echo $f_sender['sender_complement']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label" for="snd-district">Bairro</label>
+                            <input type="text" class="form-control" id="snd-district" name="sender_district" maxlength="255" value="<?php echo $f_sender['sender_district']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-4 col-lg-2">
+                            <label class="form-label" for="snd-city">Cidade</label>
+                            <input type="text" class="form-control" id="snd-city" name="sender_city" maxlength="255" value="<?php echo $f_sender['sender_city']; ?>">
+                        </div>
+                        <div class="col-12 col-sm-2 col-lg-1">
+                            <label class="form-label" for="snd-uf">UF</label>
+                            <input type="text" class="form-control" id="snd-uf" name="sender_uf" maxlength="2" value="<?php echo $f_sender['sender_uf']; ?>">
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Salvar remetente
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 

@@ -43,6 +43,18 @@ class orders_controller
     public const TRACKING_CODE_MAX_LENGTH = 64;
 
     /**
+     * Plano 025: chaves de `settings` do endereco de remetente impresso como 2a
+     * etiqueta. Duplicada de config_controller::SENDER_KEYS de proposito — ver o
+     * comentario de lá (app/inc/lib nao pode ter arquivo so no manager).
+     *
+     * @var list<string>
+     */
+    private const SENDER_KEYS = [
+        'sender_name', 'sender_zip', 'sender_street', 'sender_number',
+        'sender_complement', 'sender_district', 'sender_city', 'sender_uf',
+    ];
+
+    /**
      * Minimo de digitos do sufixo de telefone aceito pelo filtro — o admin so
      * ve os ultimos 4 digitos na maioria das telas, entao 4 e o piso pratico.
      * Compartilhado entre buildFilter() e o placeholder do input em orders.php.
@@ -561,7 +573,40 @@ class orders_controller
             basic_redir($orders_url);
         }
 
+        $sender = $this->loadSenderAddress();
+
         include(constant("cRootServer") . "ui/page/order_label.php");
+    }
+
+    /**
+     * Le o endereco de remetente de `settings` (plano 025). Fail-soft: erro de
+     * banco devolve array de vazios e a etiqueta imprime so o destinatario —
+     * remetente ausente nao pode impedir o despacho. Somente leitura, dentro da
+     * transacao global que o localPDO ja abriu.
+     *
+     * @return array<string,string>
+     */
+    private function loadSenderAddress(): array
+    {
+        $sender = array_fill_keys(self::SENDER_KEYS, '');
+
+        try {
+            $model = new settings_model();
+            $stmt  = $model->select(
+                [" skey ", " svalue "],
+                "WHERE active = 'yes' AND skey IN (?, ?, ?, ?, ?, ?, ?, ?)",
+                self::SENDER_KEYS
+            );
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                if (array_key_exists($row['skey'], $sender)) {
+                    $sender[$row['skey']] = (string) $row['svalue'];
+                }
+            }
+        } catch (RuntimeException $e) {
+            Logger::getInstance()->error("orders_label sender load failed", ["error" => $e->getMessage()]);
+        }
+
+        return $sender;
     }
 
     /**
