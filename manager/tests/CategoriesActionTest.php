@@ -134,6 +134,30 @@ final class CategoriesActionTest extends DBTestCase
         $this->assertSame(0, $this->callProductsInCategory($categoryId));
     }
 
+    /**
+     * Achado do review de /phpship: categories_action() nao confere rowCount()
+     * antes de responder sucesso na remocao -- remover um idx inexistente (ja
+     * removido, ou nunca existiu) cai no mesmo caminho de sucesso silencioso.
+     * Documenta esse comportamento (aceito, ver Maintenance notes do plano 024)
+     * como teste, para uma mudanca futura em DOLModel::remove() nao virar
+     * regressao silenciosa aqui.
+     */
+    public function testRemovingNonexistentCategoryIdDoesNotThrow(): void
+    {
+        $nonexistentId = $this->createCategory();
+
+        $remove = new categories_model();
+        $remove->set_filter(["idx = ?"], [$nonexistentId]);
+        $remove->remove();
+
+        $removeAgain = new categories_model();
+        $removeAgain->set_filter(["idx = ?"], [$nonexistentId]);
+        $statement = $removeAgain->remove();
+
+        $this->assertNotNull($statement, 'remover um idx ja removido nao deve lancar excecao');
+        $this->assertSame(0, $statement->rowCount(), 'nenhuma linha ativa correspondia mais a esse idx');
+    }
+
     public function testCategoryNameTakenIsCaseInsensitive(): void
     {
         $mixedCaseName = 'Peptideos ' . uniqid();
